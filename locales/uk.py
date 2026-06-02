@@ -598,6 +598,18 @@ ntfc_new_order_ad_disabled_for_lot = "ℹ️ Товар не буде видан
 ntfc_new_order_user_blocked = "ℹ️ Товар не буде виданий, оскільки користувач знаходиться в ЧС і включено блокування авто-видачі."
 ntfc_new_order_will_be_delivered = "ℹ️ Товар буде виданий найближчим часом."
 ntfc_new_review = "🔮 Ви отримали {} за замовлення <code>{}</code>!\n\n💬<b>Відгук:</b>\n<code>{}</code>"
+unknown_item = "Невідомий товар"
+new_deal_chat_message = "📋 Дякуємо за покупку «{item.name}»!\n\nМене зараз може не бути на місці — напишіть у чат, якщо потрібна допомога."
+ntfc_item_sent = "📤 <b>Товар відправлено</b>\n\n👤 <b>Покупець:</b> {0}\n📦 <b>Товар:</b> {1}\n🆔 <b>Угода:</b> <code>{2}</code>"
+ntfc_deal_confirmed = "✅ <b>Угоду виконано</b>\n\n👤 <b>Покупець:</b> {0}\n📦 <b>Товар:</b> {1}\n🆔 <b>Угода:</b> <code>{2}</code>"
+ntfc_deal_rolled_back = "↩️ <b>Повернення за угодою</b>\n\n👤 <b>Покупець:</b> {0}\n📦 <b>Товар:</b> {1}\n🆔 <b>Угода:</b> <code>{2}</code>"
+ntfc_deal_status_changed = "🔃 Статус <a href=\"https://playerok.com/deals/{0}/\">угоди</a> змінився на «{1}»\n👤 <b>Покупець:</b> {2}"
+deal_status_paid = "Оплачено"
+deal_status_pending = "В очікуванні"
+deal_status_sent = "Товар відправлено"
+deal_status_confirmed = "Виконано"
+deal_status_rolled_back = "Повернення"
+deal_status_unknown = "Невідомо"
 
 # Логи кардинала
 crd_proxy_detected = "Виявлено проксі."

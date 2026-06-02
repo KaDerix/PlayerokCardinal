@@ -18,6 +18,59 @@ HEADERS = {
     "accept": "application/vnd.github+json"
 }
 
+# Пользовательские данные — не удалять при установке релиза (delete.json в архиве).
+_PRESERVE_DELETE_PREFIXES = ("storage/",)
+_PRESERVE_DELETE_SUFFIXES = ("_config.json", "_settings.json", "_data.json")
+
+
+def _should_preserve_on_delete(path: str) -> bool:
+    normalized = path.replace("\\", "/").lstrip("./")
+    if any(normalized.startswith(prefix) for prefix in _PRESERVE_DELETE_PREFIXES):
+        return True
+    if any(normalized.endswith(suffix) for suffix in _PRESERVE_DELETE_SUFFIXES):
+        return True
+    return False
+
+
+def _backup_plugin_configs() -> dict[str, bytes]:
+    backups: dict[str, bytes] = {}
+    plugins_dir = "plugins"
+    if not os.path.isdir(plugins_dir):
+        return backups
+    for name in os.listdir(plugins_dir):
+        if not name.endswith(".json"):
+            continue
+        path = os.path.join(plugins_dir, name)
+        if os.path.isfile(path):
+            try:
+                with open(path, "rb") as f:
+                    backups[path] = f.read()
+            except OSError as ex:
+                logger.debug("backup plugin config %s: %s", path, ex)
+    storage_plugins = os.path.join("storage", "plugins")
+    if os.path.isdir(storage_plugins):
+        for name in os.listdir(storage_plugins):
+            if not name.endswith(".json"):
+                continue
+            path = os.path.join(storage_plugins, name)
+            if os.path.isfile(path):
+                try:
+                    with open(path, "rb") as f:
+                        backups[path] = f.read()
+                except OSError as ex:
+                    logger.debug("backup plugin config %s: %s", path, ex)
+    return backups
+
+
+def _restore_plugin_configs(backups: dict[str, bytes]) -> None:
+    for path, content in backups.items():
+        try:
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(content)
+        except OSError as ex:
+            logger.warning("Не удалось восстановить конфиг плагина %s: %s", path, ex)
+
 
 class Release:
     """
@@ -360,10 +413,15 @@ def install_release(folder_name: str) -> int:
         if not os.path.exists(release_folder):
             return 2
 
+        config_backups = _backup_plugin_configs()
+
         if os.path.exists(os.path.join(release_folder, "delete.json")):
             with open(os.path.join(release_folder, "delete.json"), "r", encoding="utf-8") as f:
                 data = json.loads(f.read())
                 for i in data:
+                    if _should_preserve_on_delete(i):
+                        logger.info("Пропуск удаления пользовательских данных: %s", i)
+                        continue
                     if not os.path.exists(i):
                         continue
                     if os.path.isfile(i):
@@ -400,6 +458,8 @@ def install_release(folder_name: str) -> int:
                 except PermissionError as e:
                     logger.warning(f"Не удалось обновить директорию {i}: Permission denied. Попробуйте перезапустить бота.")
                     continue
+
+        _restore_plugin_configs(config_backups)
         return 0
     except:
         logger.debug("TRACEBACK", exc_info=True)

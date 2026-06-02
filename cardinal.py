@@ -388,9 +388,12 @@ class Cardinal(object):
             PlayerokAPI.enums.EventTypes.DEAL_STATUS_CHANGED: self.deal_status_changed_handlers,
         }
         
-        requests_delay = int(self.MAIN_CFG["Other"].get("requestsDelay", "4"))
-        
-        for event in self.listener.listen(requests_delay=requests_delay):
+        get_reviews = self.MAIN_CFG["Other"].get("getReviewEvents", "1") == "1"
+
+        for event in self.listener.listen(
+            get_new_message_events=True,
+            get_new_review_events=get_reviews,
+        ):
             if instance_id != self.run_id:
                 break
             

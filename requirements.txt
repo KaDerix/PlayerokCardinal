@@ -12,3 +12,4 @@ wrapper-tls-requests==1.1.4
 validators>=0.34.0
 colorlog>=6.9.0
 tqdm>=4.67.1
+websocket-client==1.8.0

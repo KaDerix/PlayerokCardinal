@@ -1,10 +1,33 @@
-from typing import Generator
+import json
+import uuid
+import time
+import traceback
+from datetime import datetime, timezone
 from logging import getLogger
-from datetime import datetime
+from typing import Generator
+from threading import Thread
+from queue import Queue
+from threading import Event as ThreadingEvent
+from collections import deque
+
+import websocket
 
 from ..account import Account
-from ..types import ChatList, ChatMessage, Chat
+from ..types import (
+    ChatMessage, 
+    Chat,
+    ItemDeal
+)
+from ..enums import ChatTypes
+from ..parser import (
+    chat, 
+    chat_message
+)
+from ..misc import QUERIES
 from .events import *
+
+
+logger = getLogger("playerokapi.listener")
 
 
 class EventListener:
@@ -17,55 +40,72 @@ class EventListener:
 
     def __init__(self, account: Account):
         self.account: Account = account
-        """ Объект аккаунта. """
 
-        self.__logger = getLogger("playerokapi.listener")
-        self.__review_check_deals: list[str] = [] # [deal_id]
-        self.__last_check_time: dict[str, datetime] = {} # {deal_id: last_check_time}
+        self.chat_subscriptions = {}
+        self.review_check_deals = []
+        self.review_deal_times = {}
+        self.chats = []
+        self.processed_deals = []
+        self.active_deals = {} # chat_id: [(deal_id, last_status, status_date), ...]
+        self.last_st_deal_times = {}
+        self.ws = None
+        self.q = None
+
+        self.processed_msgs = deque(maxlen=300)
+
+        self._possible_new_chat = ThreadingEvent()
+        self._last_chats_check = 0
+
+    def _parse_iso(self, iso_dt: str):
+        if iso_dt.endswith("Z"):
+            iso_dt = iso_dt[:-1] + "+00:00"
+        return datetime.fromisoformat(iso_dt)
+
+    def _get_actual_message(
+        self, message_id: str, chat_id: str
+    ) -> ChatMessage:
+        for _ in range(3):
+            time.sleep(6)
+            
+            try: msg_list = self.account.get_chat_messages(chat_id, count=12)
+            except: return
+            
+            try: return [msg for msg in msg_list.messages if msg.id == message_id][0]
+            except: pass
+
+    def _get_actual_deal( # получает свежие данные о сделки, ибо в новом ивенте она приходит устаревшая
+        self, deal_id: str
+    ) -> ItemDeal:
+        for _ in range(3):
+            try: return self.account.get_deal(deal_id)
+            except: pass
+            
+            time.sleep(3)
+
+    def _set_active_deal(
+        self, chat: Chat, deal: ItemDeal, status_date: datetime
+    ):
+        if chat.id not in self.active_deals:
+            self.active_deals[chat.id] = []
         
-        self.__listened_messages: list[str] = [] # [mess_id]
-        self.__saved_deals: list[str] = [] # [deal_id]
+        try: deal_tuple = [tuple for tuple in self.active_deals[chat.id] if deal.id in tuple][0]
+        except: deal_tuple = ()
+        
+        if not deal_tuple:
+            self.active_deals[chat.id].append((deal.id, deal.status, status_date))
+        else:
+            indx = self.active_deals[chat.id].index(deal_tuple)
+            self.active_deals[chat.id][indx] = (deal.id, deal.status, status_date)
 
-    def parse_chat_event(
-        self, chat: Chat
-    ) -> list[ChatInitializedEvent]:
-        """
-        Получает ивент с чата.
-
-        :param chat: Объект чата.
-        :type chat: `playerokapi.types.Chat`
-
-        :return: Массив ивентов.
-        :rtype: `list` of
-        `playerokapi.listener.events.ChatInitializedEvent`
-        """
-
-        if chat:
-            return [ChatInitializedEvent(chat)]
-        return []
-
-    def get_chat_events(
-        self, chats: ChatList
-    ) -> list[ChatInitializedEvent]:
-        """
-        Получает новые ивенты чатов.
-
-        :param chats: Страница чатов.
-        :type chats: `playerokapi.types.ChatList`
-
-        :return: Массив новых ивентов.
-        :rtype: `list` of
-        `playerokapi.listener.events.ChatInitializedEvent`
-        """
-
-        events = []
-        for chat in chats.chats:
-            this_events = self.parse_chat_event(chat=chat)
-            for event in this_events:
-                events.append(event)
-        return events
-
-    def parse_message_event(
+    def _is_msg_processed(
+        self, message_id: str
+    ):
+        return any((
+            msg for msg, _ in self.processed_msgs
+            if msg.id == message_id
+        ))
+    
+    def _parse_message_events(
         self, message: ChatMessage, chat: Chat
     ) -> list[
         NewMessageEvent
@@ -78,150 +118,488 @@ class EventListener:
         | DealProblemResolvedEvent
         | DealStatusChangedEvent
     ]:
-        """
-        Получает ивент с сообщения.
-        
-        :param message: Объект сообщения.
-        :type message: `playerokapi.types.ChatMessage`
-
-        :return: Массив ивентов.
-        :rtype: `list` of 
-        `playerokapi.listener.events.ChatInitializedEvent` \
-        _or_ `playerokapi.listener.events.NewMessageEvent` \
-        _or_ `playerokapi.listener.events.NewDealEvent` \
-        _or_ `playerokapi.listener.events.ItemPaidEvent` \
-        _or_ `playerokapi.listener.events.ItemSentEvent` \
-        _or_ `playerokapi.listener.events.DealConfirmedEvent` \
-        _or_ `playerokapi.listener.events.DealRolledBackEvent` \
-        _or_ `playerokapi.listener.events.DealHasProblemEvent` \
-        _or_ `playerokapi.listener.events.DealProblemResolvedEvent` \
-        _or_ `playerokapi.listener.events.DealStatusChangedEvent(message.deal)`
-        """
-
         if not message:
             return []
         
-        if message.text == "{{ITEM_PAID}}" and message.deal is not None:
-            if message.deal.id not in self.__saved_deals:
-                self.__saved_deals.append(message.deal.id)
-                return [
-                    NewDealEvent(message.deal, chat), 
-                    ItemPaidEvent(message.deal, chat)
-                ]
-        elif message.text == "{{ITEM_SENT}}" and message.deal is not None:
-            return [ItemSentEvent(message.deal, chat)]
-        elif message.text == "{{DEAL_CONFIRMED}}" and message.deal is not None:
-            return [
-                DealConfirmedEvent(message.deal, chat),
-                DealStatusChangedEvent(message.deal, chat),
-            ]
-        elif message.text == "{{DEAL_ROLLED_BACK}}" and message.deal is not None:
-            return [
-                DealRolledBackEvent(message.deal, chat),
-                DealStatusChangedEvent(message.deal, chat),
-            ]
-        elif message.text == "{{DEAL_HAS_PROBLEM}}" and message.deal is not None:
-            return [
-                DealHasProblemEvent(message.deal, chat),
-                DealStatusChangedEvent(message.deal, chat),
-            ]
-        elif message.text == "{{DEAL_PROBLEM_RESOLVED}}" and message.deal is not None:
-            return [
-                DealProblemResolvedEvent(message.deal, chat),
-                DealStatusChangedEvent(message.deal, chat),
-            ]
-
-        return [NewMessageEvent(message, chat)]
-
-    def _should_check_deal(
-        self, deal_id: int, delay: int = 30
-    ) -> bool:
-        now = time.time()
-        last_time = self.__last_check_time.get(deal_id, 0)
-        if now - last_time > delay:
-            self.__last_check_time[deal_id] = now
-            return True
-        return False
+        if message.text == "{{ITEM_PAID}}":
+            actual_msg = self._get_actual_message(message.id, chat.id) or message
+            actual_deal = self._get_actual_deal(actual_msg.deal.id) or message.deal
             
-    def get_message_events(
-        self, old_chats: ChatList, new_chats: ChatList, get_new_review_events: bool
-    ) -> list[
-        NewMessageEvent
-        | NewDealEvent
-        | NewReviewEvent
-        | ItemPaidEvent
-        | ItemSentEvent
-        | DealConfirmedEvent
-        | DealRolledBackEvent
-        | DealHasProblemEvent
-        | DealProblemResolvedEvent
-        | DealStatusChangedEvent,
-    ]:
-        """
-        Получает новые ивенты сообщений, сравнивая старые чаты с новыми полученными.
+            if actual_msg and actual_deal:
+                deal_id = actual_deal.id
+                #status_date = self._parse_iso(actual_msg.created_at)
+                #self._set_active_deal(chat, actual_deal, status_date)
+                if deal_id not in self.review_check_deals:
+                    self.review_check_deals.append(deal_id)
+                if deal_id not in self.processed_deals:
+                    self.processed_deals.append(deal_id)
+                else:
+                    return []
+                return [
+                    NewDealEvent(actual_deal, chat), 
+                    ItemPaidEvent(actual_deal, chat)
+                ]
         
-        :param old_chats: Старые чаты.
-        :type old_chats: `playerokapi.types.ChatList`
+        elif message.text == "{{ITEM_SENT}}":
+            actual_msg = self._get_actual_message(message.id, chat.id) or message
+            actual_deal = self._get_actual_deal(actual_msg.deal.id) or message.deal
+            
+            if actual_msg and actual_deal:
+                #status_date = self._parse_iso(actual_msg.created_at)
+                #self._set_active_deal(chat, actual_deal, status_date)
+                return [
+                    ItemSentEvent(actual_deal, chat),
+                    DealStatusChangedEvent(actual_deal, chat)
+                ]
         
-        :param new_chats: Новые чаты.
-        :type new_chats: `playerokapi.types.ChatList`
+        elif message.text.startswith("{{DEAL_CONFIRMED") and message.text.endswith("}}"): # DEAL_CONFIRMED, DEAL_CONFIRMED_AUTOMATICALLY
+            actual_msg = self._get_actual_message(message.id, chat.id) or message
+            actual_deal = self._get_actual_deal(actual_msg.deal.id) or message.deal
+            
+            if actual_msg and actual_deal:
+                #status_date = self._parse_iso(actual_msg.created_at)
+                #self._set_active_deal(chat, actual_deal, status_date)
+                return [
+                    DealConfirmedEvent(actual_deal, chat),
+                    DealStatusChangedEvent(actual_deal, chat),
+                ]
+        
+        elif message.text == "{{DEAL_ROLLED_BACK}}":
+            actual_msg = self._get_actual_message(message.id, chat.id) or message
+            actual_deal = self._get_actual_deal(actual_msg.deal.id) or message.deal
+            
+            if actual_msg and actual_deal:
+                #status_date = self._parse_iso(actual_msg.created_at)
+                #self._set_active_deal(chat, actual_deal, status_date)
+                return [
+                    DealRolledBackEvent(actual_deal, chat),
+                    DealStatusChangedEvent(actual_deal, chat),
+                ]
+        
+        elif message.text == "{{DEAL_HAS_PROBLEM}}":
+            actual_msg = self._get_actual_message(message.id, chat.id) or message
+            actual_deal = self._get_actual_deal(actual_msg.deal.id) or message.deal
+            
+            if actual_msg and actual_deal:
+                #status_date = self._parse_iso(actual_msg.created_at)
+                #self._set_active_deal(chat, actual_deal, status_date)
+                return [
+                    DealHasProblemEvent(actual_deal, chat),
+                    DealStatusChangedEvent(actual_deal, chat),
+                ]
+        
+        elif message.text == "{{DEAL_PROBLEM_RESOLVED}}":
+            actual_msg = self._get_actual_message(message.id, chat.id) or message
+            actual_deal = self._get_actual_deal(actual_msg.deal.id) or message.deal
+            
+            if actual_msg and actual_deal:
+                #status_date = self._parse_iso(actual_msg.created_at)
+                #self._set_active_deal(chat, actual_deal, status_date)
+                return [
+                    DealProblemResolvedEvent(actual_deal, chat),
+                    DealStatusChangedEvent(actual_deal, chat),
+                ]
+        
+        return [NewMessageEvent(message, chat)]
+    
+    def _send_connection_init(self):
+        self.ws.send(json.dumps({
+            "type": "connection_init", 
+            "payload": {
+                "x-gql-op": "ws-subscription",
+                "x-gql-path": "/chats/[id]",
+                "x-timezone-offset": -180
+            }
+        }))
 
-        :return: Массив новых ивентов.
-        :rtype: `list` of 
-        `playerokapi.listener.events.ChatInitializedEvent` \
-        _or_ `playerokapi.listener.events.NewMessageEvent` \
-        _or_ `playerokapi.listener.events.NewDealEvent` \
-        _or_ `playerokapi.listener.events.NewReviewEvent` \
-        _or_ `playerokapi.listener.events.ItemPaidEvent` \
-        _or_ `playerokapi.listener.events.ItemSentEvent` \
-        _or_ `playerokapi.listener.events.DealConfirmedEvent` \
-        _or_ `playerokapi.listener.events.DealRolledBackEvent` \
-        _or_ `playerokapi.listener.events.DealHasProblemEvent` \
-        _or_ `playerokapi.listener.events.DealProblemResolvedEvent` \
-        _or_ `playerokapi.listener.events.DealStatusChangedEvent(message.deal)`
-        """
-        
+    def _subscribe_chat_updated(self):
+        self.ws.send(json.dumps({
+            "id": str(uuid.uuid4()), 
+            "type": "subscribe",
+            "payload": {
+                "extensions": {},
+                "operationName": "chatUpdated",
+                "query": QUERIES.get("chatUpdated"),
+                "variables": {
+                    "filter": {
+                        "userId": self.account.id
+                    },
+                    "showForbiddenImage": True
+                }
+            },
+        }))
+
+    def _subscribe_chat_marked_as_read(self):
+        self.ws.send(json.dumps({
+            "id": str(uuid.uuid4()), 
+            "type": "subscribe",
+            "payload": {
+                "extensions": {},
+                "operationName": "chatMarkedAsRead",
+                "query": QUERIES.get("chatMarkedAsRead"),
+                "variables": {
+                    "filter": {
+                        "userId": self.account.id
+                    },
+                    "showForbiddenImage": True
+                }
+            }
+        }))
+
+    def _subscribe_user_updated(self):
+        self.ws.send(json.dumps({
+            "id": str(uuid.uuid4()), 
+            "type": "subscribe",
+            "payload": {
+                "extensions": {},
+                "operationName": "userUpdated",
+                "query": QUERIES.get("userUpdated"),
+                "variables": {
+                    "userId": self.account.id
+                }
+            }
+        }))
+
+    def _subscribe_chat_message_created(self, chat_id):
+        _uuid = str(uuid.uuid4())
+        self.chat_subscriptions[_uuid] = chat_id
+        self.ws.send(json.dumps({
+            "id": _uuid, 
+            "type": "subscribe",
+            "payload": {
+                "extensions": {},
+                "operationName": "chatMessageCreated",
+                "query": QUERIES.get("chatMessageCreated"),
+                "variables": {
+                    "filter": {
+                        "chatId": chat_id
+                    }
+                }
+            }
+        }))
+
+    def _is_chat_subscribed(self, chat_id):
+        for _, sub_chat_id in self.chat_subscriptions.items():
+            if chat_id == sub_chat_id:
+                return True
+        return False
+    
+    def _proccess_new_chat_message(self, chat, message):
         events = []
-        if get_new_review_events:
-            for deal_id in self.__review_check_deals:
-                if not self._should_check_deal(deal_id):
-                    continue
-                deal = self.account.get_deal(deal_id)
-                if deal.review is not None:
-                    del self.__review_check_deals[self.__review_check_deals.index(deal_id)]
-                    try: deal.chat = self.account.get_chat(deal.chat.id)
-                    except: pass
-                    events.append(NewReviewEvent(deal, deal.chat))
+        is_new_chat = chat.id not in [chat_.id for chat_ in self.chats]
+
+        if is_new_chat:
+            self.chats.append(chat)
+        else:
+            for old_chat in list(self.chats):
+                if old_chat.id == chat.id:
+                    self.chats.remove(old_chat)
+                    self.chats.append(chat)
+                    break
+
+        if not self._is_msg_processed(message.id):
+            self.processed_msgs.append((message, chat.id))
         
-        old_chats_last_mess_ids = [chat.last_message.id for chat in old_chats.chats if chat.last_message] if old_chats else []
-        new_chats_last_mess_ids = [chat.last_message.id for chat in new_chats.chats if chat.last_message] if new_chats else []
-        if old_chats_last_mess_ids != new_chats_last_mess_ids:
-            old_chat_map = {chat.id: chat for chat in old_chats.chats}
-            for new_chat in new_chats.chats:
-                old_chat = old_chat_map.get(new_chat.id)
-
-                if not old_chat:
-                    msg_list = self.account.get_chat_messages(new_chat.id, 24)
-                    new_msgs = [msg for msg in msg_list.messages]
-                elif old_chat:
-                    if not new_chat.last_message or not old_chat.last_message:
-                        continue
-                    if new_chat.last_message.id == old_chat.last_message.id:
-                        continue
-                    msg_list = self.account.get_chat_messages(new_chat.id, 24)
-                    new_msgs = [msg for msg in msg_list.messages if datetime.fromisoformat(msg.created_at) > datetime.fromisoformat(old_chat.last_message.created_at)]
-
-                for msg in sorted(new_msgs, key=lambda m: m.created_at):
-                    if msg.id in self.__listened_messages:
-                        continue
-                    if get_new_review_events and msg.deal and msg.deal.id not in self.__review_check_deals:
-                        self.__review_check_deals.append(new_chat.last_message.deal.id)
-                    self.__listened_messages.append(msg.id)
-                    events.extend(self.parse_message_event(msg, new_chat))
+        events.extend(self._parse_message_events(message, chat))
         return events
+    
+    def _process_chats_last_messages(self, chats):
+        now = datetime.now(timezone.utc)
+        
+        for chat in chats:
+            msg = chat.last_message
+            if (
+                msg
+                and (now - self._parse_iso(msg.created_at).astimezone(timezone.utc)).total_seconds() > 90
+                and not self._is_msg_processed(msg.id)
+            ):
+                self.processed_msgs.append((msg, chat.id))
+    
+    def proccess_ws_message(self, msg):
+        try:
+            try: msg_data = json.loads(msg)
+            except json.JSONDecodeError: return
+            
+            logger.debug(f"WS -> {msg_data}")
+            
+            if msg_data["type"] == "connection_ack":
+                self._subscribe_chat_updated()
+                self._subscribe_user_updated()
+                
+                for chat_ in self.chats:
+                    self._subscribe_chat_message_created(chat_.id)
+            else:
+                payload_data = (msg_data.get("payload") or {}).get("data") or {}
+                
+                if "userUpdated" in payload_data:
+                    unread_chats = payload_data["userUpdated"].get("unreadChatsCounter", 0)
+                    if unread_chats > 0:
+                        self._possible_new_chat.set()
+
+                if "chatUpdated" in payload_data:
+                    _chat = chat(payload_data["chatUpdated"])
+                    _message = chat_message(payload_data["chatUpdated"]["lastMessage"])
+
+                    if not self._is_chat_subscribed(_chat.id):
+                        self._subscribe_chat_message_created(_chat.id)
+                        
+                        events = [ChatInitializedEvent(_chat)]
+                        events.extend(self._proccess_new_chat_message(_chat, _message))
+                        for event in events:
+                            # yield event
+                            self.q.put(event)
+
+                if "chatMessageCreated" in payload_data:
+                    chat_id = self.chat_subscriptions.get(msg_data["id"])
+                    try: _chat = [chat_ for chat_ in self.chats if chat_.id == chat_id][0]
+                    except: return
+                    _message = chat_message(payload_data["chatMessageCreated"])
+
+                    events = self._proccess_new_chat_message(_chat, _message)
+                    for event in events:
+                        # yield event
+                        self.q.put(event)
+        except Exception:
+            logger.debug(f"Ошибка обработки сообщения в WebSocket`е: {traceback.format_exc()}")
+        
+    def listen_new_messages(self):
+        headers = {
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "ru,en;q=0.9",
+            "cache-control": "no-cache",
+            "connection": "Upgrade",
+            "origin": "https://playerok.com",
+            "pragma": "no-cache",
+            "sec-websocket-extensions": "permessage-deflate; client_max_window_bits",
+            "cookie": "; ".join([f"{k}={v}" for k, v in self.account.cookies.items()]),
+            "user-agent": self.account.user_agent
+        }
+
+        proxy_host, proxy_port, proxy_auth = None, None, None
+        
+        if self.account.proxy:
+            if "@" in self.account.proxy:
+                proxy_host, proxy_port = self.account.proxy.split("@")[1].split(":")
+                proxy_username, proxy_password = self.account.proxy.split("@")[0].split(":")
+                proxy_auth = (proxy_username, proxy_password)
+            else:
+                proxy_host, proxy_port = self.account.proxy.split(":")
+
+        # try:
+        #     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        #     ssl_context.check_hostname = True
+        #     ssl_context.verify_mode = ssl.CERT_NONE
+        #     ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        #     ssl_context.maximum_version = ssl.TLSVersion.TLSv1_3
+        #     ssl_context.load_verify_locations(certifi.where())
+        # except:
+        #     ssl_context = None
+
+        try: self.chats = self.account.get_chats(count=24).chats # инициализация первых 24 чатов
+        except: self.chats = []
+
+        self._process_chats_last_messages(self.chats)
+        
+        for chat_ in self.chats:
+            yield ChatInitializedEvent(chat_)
+
+        while True:
+            try:
+                self.ws = websocket.WebSocket(
+                    sslopt={"ca_certs": self.account._tmp_cert_path}
+                )
+                self.ws.connect(
+                    url="wss://ws.playerok.com/graphql",
+                    header=[f"{k}: {v}" for k, v in headers.items()],
+                    subprotocols=["graphql-transport-ws"],
+                    http_proxy_host=proxy_host,
+                    http_proxy_port=proxy_port,
+                    http_proxy_auth=proxy_auth
+                )
+                self._send_connection_init()          
+
+                while True:
+                    msg = self.ws.recv()
+                    Thread(target=self.proccess_ws_message, args=(msg,), daemon=True).start()
+            except websocket._exceptions.WebSocketException:
+                time.sleep(3)
+                pass
+
+    def _should_check_review_deal(self, deal_id, delay=30, max_tries=30) -> bool:
+        now = time.time()
+        info = self.review_deal_times.get(deal_id, {"last": 0, "tries": 0})
+        
+        last_time = info["last"]
+        tries = info["tries"]
+        
+        if now - last_time > delay:
+            self.review_deal_times[deal_id] = {
+                "last": now,
+                "tries": tries+1
+            }
+            return True
+        elif tries >= max_tries:
+            if deal_id in self.review_check_deals:
+                self.review_check_deals.remove(deal_id)
+            del self.review_deal_times[deal_id]
+
+        return False
+    
+    def listen_new_reviews(self):
+        while True:
+            for deal_id in list(self.review_check_deals):
+                try:
+                    if not self._should_check_review_deal(deal_id):
+                        continue
+                    
+                    try: deal = self.account.get_deal(deal_id)
+                    except: continue
+                    
+                    if deal.review:
+                        if deal_id in self.review_check_deals:
+                            self.review_check_deals.remove(deal_id)
+                        
+                        try: 
+                            deal.chat = [chat_ for chat_ in self.chats if chat_.id == deal.chat.id][0]
+                        except: 
+                            try: deal.chat = self.account.get_chat(deal.chat.id)
+                            except: pass
+                        
+                        yield NewReviewEvent(deal, deal.chat)
+                except:
+                    logger.debug(f"Ошибка проверки новых отзывов в сделке {deal_id}: {traceback.format_exc()}")
+            time.sleep(1)
+
+    def _wait_for_check_new_chats(self, delay=10):
+        sleep_time = delay - (time.time() - self._last_chats_check)
+        if sleep_time > 0: 
+            time.sleep(sleep_time)
+
+    def listen_new_deals(self):
+        while True:
+            try:
+                by_event = self._possible_new_chat.wait(timeout=15)
+                if by_event:
+                    self._possible_new_chat.clear()
+                    self._wait_for_check_new_chats()
+
+                possible_chats = []
+                now = datetime.now(timezone.utc)
+
+                for _ in range(3):
+                    try:
+                        if by_event:
+                            time.sleep(8) # плеерок может не сразу отобразить актуальные чаты
+                        
+                        chats = self.account.get_chats(count=5, type=ChatTypes.PM).chats
+                        for chat in chats:
+                            last_msg = chat.last_message
+                            is_msg_processed = self._is_msg_processed(last_msg.id)
+                            is_chat_processed = any((_chat for _chat in self.chats if _chat.id == chat.id))
+                            
+                            if (
+                                not is_chat_processed
+                                or not is_msg_processed or (
+                                    is_msg_processed
+                                    and (now - self._parse_iso(last_msg.created_at).astimezone(timezone.utc)).total_seconds() <= 90
+                                )
+                            ):
+                                possible_chats.append(chat)
+                                break
+                                    
+                        if possible_chats:
+                            break # если найдены чаты с возможными новыми сделками - останавливаем цикл
+
+                        if not by_event:
+                            time.sleep(8)
+                    except:
+                        pass
+
+                for chat in possible_chats:
+                    last_msg = chat.last_message
+                    
+                    # Новый чат — смотрим last_message сначала (быстрый путь)
+                    if (
+                        last_msg and last_msg.text == "{{ITEM_PAID}}"
+                        and (now - self._parse_iso(last_msg.created_at).astimezone(timezone.utc)).total_seconds() <= 90
+                    ):
+                        events = self._proccess_new_chat_message(chat, last_msg)
+                        for event in events:
+                            yield event
+                        continue
+
+                    # медленный путь: last_message перебит новым сообщением от покупателя.
+                    # запрашиваем историю и ищем {{ITEM_PAID}} среди первых сообщений.
+                    try:
+                        time.sleep(1)
+                        messages = self.account.get_chat_messages(chat.id, count=12).messages
+                        new_paid_msg = next(
+                            (
+                            msg for msg in messages
+                            if msg.text == "{{ITEM_PAID}}"
+                            and (now - self._parse_iso(msg.created_at).astimezone(timezone.utc)).total_seconds() <= 90 
+                            # ^ проверка на то, что эта сделка была совершена недавно
+                            ),
+                            None
+                        )
+                        
+                        if new_paid_msg:
+                            events = self._proccess_new_chat_message(chat, new_paid_msg)
+                            for event in events:
+                                yield event
+                    except:
+                        logger.debug(f"Ошибка получения истории сообщений нового чата {chat.id}: {traceback.format_exc()}")
+            except websocket._exceptions.WebSocketException:
+                pass
+            except:
+                logger.debug(f"Ошибка проверки новых сделок: {traceback.format_exc()}")
+            
+            self._last_chats_check = time.time()
+
+    def listen_deal_statuses(self): # слушает изменения статусов во всех активных сделках
+        while True: # TODO: Доработать, проверить ещё раз на баги 
+            for chat_id, deals in list(self.active_deals.items()):
+                for _ in range(3):
+                    try: 
+                        msg_list = self.account.get_chat_messages(chat_id, 24)
+                        messages = sorted(
+                            msg_list.messages, 
+                            key=lambda x: self._parse_iso(x.created_at)
+                        )
+                        break
+                    except: 
+                        time.sleep(6)
+                
+                for deal_id, last_status, status_date in deals:
+                    try:
+                        status_msgs = [
+                            msg for msg in messages 
+                            if self._parse_iso(msg.created_at) 
+                            >= status_date and msg.deal.status
+                        ]
+
+                        for msg in status_msgs:
+                            msg_date = self._parse_iso(msg.created_at)
+                            if msg.deal.status == last_status and msg_date == status_date:
+                                continue
+                            
+                            try: chat = self.account.get_chat(chat_id)
+                            except: continue
+                            
+                            events = self._parse_message_events(msg, chat)
+                            for event in events:
+                                yield event
+
+                            self._set_active_deal(chat, msg.deal, msg_date)
+                    except:
+                        logger.debug(f"Ошибка проверки статусов в сделке {deal_id}: {traceback.format_exc()}")
+                    time.sleep(8)
+            time.sleep(1)
 
     def listen(
-        self, requests_delay: int | float = 4, get_new_review_events: bool = True
+        self, 
+        get_new_message_events: bool = True,
+        get_new_review_events: bool = True
     ) -> Generator[
         ChatInitializedEvent
         | NewMessageEvent
@@ -237,44 +615,22 @@ class EventListener:
         None,
         None
     ]:
-        """
-        "Слушает" события в чатах. 
-        Бесконечно отправляет запросы, узнавая новые события из чатов.
+        if not any((get_new_review_events, get_new_message_events)):
+            return
+        
+        self.q = Queue()
 
-        :param requests_delay: Периодичность отправления запросов (в секундах).
-        :type requests_delay: `int` or `float`
+        def run(gen):
+            for event in gen:
+                self.q.put(event)
 
-        :param get_new_review_events: Нужно ли слушать новые отзывы? (отправляет больше запросов).
-        :type get_new_review_events: `bool`
+        if get_new_message_events:
+            Thread(target=run, args=(self.listen_new_messages(),), daemon=True).start()
+            Thread(target=run, args=(self.listen_new_deals(),), daemon=True).start()
+            #Thread(target=run, args=(self.listen_deal_statuses(),), daemon=True).start()
+        
+        if get_new_review_events:
+            Thread(target=run, args=(self.listen_new_reviews(),), daemon=True).start()
 
-        :return: Полученный ивент.
-        :rtype: `Generator` of
-        `playerokapi.listener.events.ChatInitializedEvent` \
-        _or_ `playerokapi.listener.events.NewMessageEvent` \
-        _or_ `playerokapi.listener.events.NewDealEvent` \
-        _or_ `playerokapi.listener.events.NewReviewEvent` \
-        _or_ `playerokapi.listener.events.ItemPaidEvent` \
-        _or_ `playerokapi.listener.events.ItemSentEvent` \
-        _or_ `playerokapi.listener.events.DealConfirmedEvent` \
-        _or_ `playerokapi.listener.events.DealRolledBackEvent` \
-        _or_ `playerokapi.listener.events.DealHasProblemEvent` \
-        _or_ `playerokapi.listener.events.DealProblemResolvedEvent` \
-        _or_ `playerokapi.listener.events.DealStatusChangedEvent(message.deal)`
-        """
-
-        chats: ChatList = None
         while True:
-            try:
-                next_chats = self.account.get_chats(24)
-                if not chats:
-                    events = self.get_chat_events(next_chats)
-                    for event in events:
-                        yield event
-                else:
-                    events = self.get_message_events(chats, next_chats, get_new_review_events)
-                    for event in events:
-                        yield event
-                chats = next_chats
-            except Exception as e:
-                self.__logger.error(f"Ошибка при получении ивентов: {e}")
-            time.sleep(requests_delay)
+            yield self.q.get()

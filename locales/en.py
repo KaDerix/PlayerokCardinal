@@ -596,6 +596,18 @@ ntfc_new_order_ad_disabled_for_lot = "ℹ️ The goods will not be delivered bec
 ntfc_new_order_user_blocked = "ℹ️ The goods will not be delivered, because the user is on the black list and the auto-delivery lock is on."
 ntfc_new_order_will_be_delivered = "ℹ️ The product will be delivered as soon as possible."
 ntfc_new_review = "🔮 You received {} for the order <code>{}</code>!\n\n💬<b>Review:</b>\n<code>{}</code>"
+unknown_item = "Unknown item"
+new_deal_chat_message = "📋 Thank you for purchasing «{item.name}»!\n\nI may not be online right now — message me in chat if you need help."
+ntfc_item_sent = "📤 <b>Item sent</b>\n\n👤 <b>Buyer:</b> {0}\n📦 <b>Item:</b> {1}\n🆔 <b>Deal:</b> <code>{2}</code>"
+ntfc_deal_confirmed = "✅ <b>Deal completed</b>\n\n👤 <b>Buyer:</b> {0}\n📦 <b>Item:</b> {1}\n🆔 <b>Deal:</b> <code>{2}</code>"
+ntfc_deal_rolled_back = "↩️ <b>Deal refunded</b>\n\n👤 <b>Buyer:</b> {0}\n📦 <b>Item:</b> {1}\n🆔 <b>Deal:</b> <code>{2}</code>"
+ntfc_deal_status_changed = "🔃 <a href=\"https://playerok.com/deals/{0}/\">Deal</a> status changed to «{1}»\n👤 <b>Buyer:</b> {2}"
+deal_status_paid = "Paid"
+deal_status_pending = "Pending"
+deal_status_sent = "Item sent"
+deal_status_confirmed = "Completed"
+deal_status_rolled_back = "Refunded"
+deal_status_unknown = "Unknown"
 
 # cardinal.py logs
 crd_proxy_detected = "Proxy detected."

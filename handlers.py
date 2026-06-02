@@ -150,12 +150,80 @@ def send_command_notification_handler(c: Cardinal, event: NewMessageEvent):
     Thread(target=c.telegram.send_notification, args=(text, keyboards.reply(chat.id, chat_name),
                                                       NotificationTypes.command), daemon=True).start()
 
+def _deal_buyer_username(deal) -> str:
+    if hasattr(deal, "user") and deal.user:
+        if hasattr(deal.user, "username") and deal.user.username:
+            return deal.user.username
+        if hasattr(deal.user, "id"):
+            return str(deal.user.id)
+    return "Unknown"
+
+
+def _deal_item_name(deal) -> str:
+    if hasattr(deal, "item") and deal.item and hasattr(deal.item, "name"):
+        return deal.item.name or _("unknown_item")
+    return _("unknown_item")
+
+
+def _deal_price_rub(deal) -> float:
+    if hasattr(deal, "item") and deal.item and hasattr(deal.item, "price"):
+        price = deal.item.price or 0
+        return price / 100 if price else 0
+    return 0
+
+
+def enrich_deal_handler(c: Cardinal, event: NewDealEvent | ItemPaidEvent):
+    deal = event.deal
+    if not deal or not getattr(deal, "item", None) or not getattr(deal.item, "id", None):
+        return
+    if getattr(deal.item, "name", None) and getattr(deal.item, "category", None):
+        return
+    try:
+        deal.item = c.account.get_item(id=deal.item.id)
+        logger.debug(f"Сделка #{deal.id} обогащена данными товара «{getattr(deal.item, 'name', '?')}»")
+    except Exception as e:
+        logger.warning(f"Не удалось обогатить сделку #{deal.id}: {e}")
+
+
+_recent_auto_deliveries: dict[str, float] = {}
+
+
+def new_deal_welcome_handler(c: Cardinal, event: NewDealEvent):
+    deal = event.deal
+    chat = event.chat
+    if not deal or not chat:
+        return
+    if hasattr(deal, "user") and deal.user and str(deal.user.id) == str(c.account.id):
+        return
+    for chat_id in (getattr(c.account, "system_chat_id", None), getattr(c.account, "support_chat_id", None)):
+        if chat_id and str(chat.id) == str(chat_id):
+            return
+
+    greetings_cfg = c.MAIN_CFG.get("Greetings", {}) if hasattr(c.MAIN_CFG, "get") else {}
+    if isinstance(greetings_cfg, dict) and greetings_cfg.get("sendNewDealMessage", "0") != "1":
+        return
+
+    item_name = _deal_item_name(deal)
+    price_rub = _deal_price_rub(deal)
+    text = _("new_deal_chat_message", item_name, f"{price_rub:.2f}")
+    text = cardinal_tools.format_order_text(text, deal)
+    buyer = _deal_buyer_username(deal)
+    from threading import Thread
+    Thread(target=c.send_message, args=(chat.id, text, buyer), daemon=True).start()
+
+
 def auto_delivery_handler(c: Cardinal, event: NewDealEvent | ItemPaidEvent):
     if not c.autodelivery_enabled:
         return
     
     deal = event.deal
     chat = event.chat
+
+    now = time.time()
+    if deal.id in _recent_auto_deliveries and now - _recent_auto_deliveries[deal.id] < 60:
+        logger.debug(f"Автовыдача для сделки #{deal.id} уже выполнялась — пропуск")
+        return
+    _recent_auto_deliveries[deal.id] = now
     
     logger.info(f"Обработка заказа $YELLOW#{deal.id}$RESET")
     
@@ -272,18 +340,17 @@ def send_new_deal_notification(c: Cardinal, event: NewDealEvent):
     deal = event.deal
     chat = event.chat
     
-    buyer_username = deal.user.username if hasattr(deal, 'user') and hasattr(deal.user, 'username') else str(deal.user.id) if hasattr(deal, 'user') and deal.user else "Unknown"
+    buyer_username = _deal_buyer_username(deal)
     
     if buyer_username in c.blacklist and hasattr(c.MAIN_CFG, 'get') and isinstance(c.MAIN_CFG.get("BlockList"), dict) and c.MAIN_CFG.get("BlockList", {}).get("blockNewOrderNotification") == "1":
         return
     
-    item_name = deal.item.name if hasattr(deal, 'item') and hasattr(deal.item, 'name') else "Неизвестный товар"
+    item_name = _deal_item_name(deal)
     subcategory_name = ""
     if hasattr(deal, 'item') and deal.item and hasattr(deal.item, 'category') and deal.item.category:
         subcategory_name = deal.item.category.name if hasattr(deal.item.category, 'name') else ""
     
-    price = deal.item.price if hasattr(deal, 'item') and hasattr(deal.item, 'price') else 0
-    price_rub = price / 100 if price else 0
+    price_rub = _deal_price_rub(deal)
     
     delivery_config = None
     lot_id = str(deal.item.id) if hasattr(deal, 'item') and deal.item and hasattr(deal.item, 'id') else None
@@ -317,13 +384,46 @@ def send_new_deal_notification(c: Cardinal, event: NewDealEvent):
 
 
 def send_item_sent_notification(c: Cardinal, event: ItemSentEvent):
-    pass
+    if c.telegram is None:
+        return
+    deal = event.deal
+    chat = event.chat
+    buyer_username = _deal_buyer_username(deal)
+    item_name = _deal_item_name(deal)
+    text = _("ntfc_item_sent", buyer_username, item_name, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    from tg_bot.utils import NotificationTypes
+    from threading import Thread
+    Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
+           daemon=True).start()
 
 def send_deal_confirmed_notification(c: Cardinal, event: DealConfirmedEvent):
-    pass
+    if c.telegram is None:
+        return
+    deal = event.deal
+    chat = event.chat
+    buyer_username = _deal_buyer_username(deal)
+    item_name = _deal_item_name(deal)
+    text = _("ntfc_deal_confirmed", buyer_username, item_name, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    from tg_bot.utils import NotificationTypes
+    from threading import Thread
+    Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
+           daemon=True).start()
 
 def send_deal_rolled_back_notification(c: Cardinal, event: DealRolledBackEvent):
-    pass
+    if c.telegram is None:
+        return
+    deal = event.deal
+    chat = event.chat
+    buyer_username = _deal_buyer_username(deal)
+    item_name = _deal_item_name(deal)
+    text = _("ntfc_deal_rolled_back", buyer_username, item_name, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    from tg_bot.utils import NotificationTypes
+    from threading import Thread
+    Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
+           daemon=True).start()
 
 def send_new_review_notification(c: Cardinal, event: NewReviewEvent):
     if c.telegram is None:
@@ -399,8 +499,32 @@ def send_deal_problem_resolved_notification(c: Cardinal, event: DealProblemResol
     Thread(target=c.telegram.send_notification, args=(notification_text, keyboard, NotificationTypes.deal_problem),
            daemon=True).start()
 
+def _deal_status_label(status) -> str:
+    labels = {
+        "PAID": _("deal_status_paid"),
+        "PENDING": _("deal_status_pending"),
+        "SENT": _("deal_status_sent"),
+        "CONFIRMED": _("deal_status_confirmed"),
+        "ROLLED_BACK": _("deal_status_rolled_back"),
+    }
+    if status and hasattr(status, "name"):
+        return labels.get(status.name, status.name)
+    return _("deal_status_unknown")
+
+
 def send_deal_status_changed_notification(c: Cardinal, event: DealStatusChangedEvent):
-    pass
+    if c.telegram is None:
+        return
+    deal = event.deal
+    chat = event.chat
+    buyer_username = _deal_buyer_username(deal)
+    status_text = _deal_status_label(getattr(deal, "status", None))
+    text = _("ntfc_deal_status_changed", deal.id, status_text, buyer_username)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    from tg_bot.utils import NotificationTypes
+    from threading import Thread
+    Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
+           daemon=True).start()
 
 def auto_restore_handler(c: Cardinal, event: ItemPaidEvent | ItemSentEvent):
     if not c.autorestore_enabled:
@@ -1036,13 +1160,15 @@ def register_handlers(c: Cardinal):
     c.new_message_handlers.append(send_response_handler)
     c.new_message_handlers.append(send_command_notification_handler)
     
+    c.new_deal_handlers.append(enrich_deal_handler)
     c.new_deal_handlers.append(send_new_deal_notification)
+    c.new_deal_handlers.append(new_deal_welcome_handler)
     c.new_deal_handlers.append(auto_delivery_handler)
 
     from Utils import playerok_automation
     c.new_deal_handlers.append(playerok_automation.try_auto_complete_deal)
     
-    c.item_paid_handlers.append(auto_delivery_handler)
+    c.item_paid_handlers.append(enrich_deal_handler)
     c.item_paid_handlers.append(auto_restore_handler)
     
     c.item_sent_handlers.append(send_item_sent_notification)
