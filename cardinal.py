@@ -133,6 +133,8 @@ class Cardinal(object):
         self.start_time = int(time.time())
         self.instance_id = id(self)
         self.blacklist = cardinal_tools.load_blacklist()
+        self.tg_profile = None
+        self.last_tg_profile_update = None
         
         pk = self.MAIN_CFG["Playerok"]
         cardinal_tools.ensure_automation_configs()
@@ -251,6 +253,28 @@ class Cardinal(object):
             logger.debug("TRACEBACK", exc_info=True)
             from PlayerokAPI.types import AccountBalance
             return AccountBalance(id="", value=0, frozen=0, available=0, withdrawable=0, pending_income=0)
+
+    def update_lots_and_categories(self) -> bool:
+        """Обновляет кэш лотов аккаунта для Telegram-ПУ и плагинов."""
+        from Utils import playerok_tg_profile
+        from locales.localizer import Localizer
+
+        try:
+            if not self.account.id:
+                self.account.get()
+            self.tg_profile = playerok_tg_profile.build_tg_profile(self.account)
+            import datetime
+            self.last_tg_profile_update = datetime.datetime.now()
+            language = self.MAIN_CFG.get("Other", {}).get("language", "ru")
+            _ = Localizer(language).translate
+            logger.info(
+                _("crd_tg_profile_updated", len(self.tg_profile.get_lots()), len(self.tg_profile.get_sorted_lots(2)))
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка обновления лотов: {e}")
+            logger.debug("TRACEBACK", exc_info=True)
+            return False
 
     def __init_account(self):
         """Инициализирует аккаунт"""

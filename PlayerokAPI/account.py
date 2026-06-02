@@ -132,6 +132,8 @@ class Account:
 
         self._refresh_clients()
         self.__logger = getLogger("playerokapi")
+        from .fp_compat import apply_fp_compat
+        apply_fp_compat(self)
 
     def _refresh_clients(self):
         self.__tls_requests = tls_requests.Client(
