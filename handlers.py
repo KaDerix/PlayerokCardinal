@@ -1137,6 +1137,8 @@ def send_bot_started_notification_handler(c: Cardinal, *args):
     
     text = _("poc_init", c.VERSION, c.account.username, c.account.id,
              balance_rub, balance_usd, balance_eur, active_sales)
+    if os.getenv("POC_IS_RUNNING_AS_SERVICE", "0") == "1":
+        text += _("poc_init_service_hint")
     for i in c.telegram.init_messages:
         try:
             c.telegram.bot.edit_message_text(text, i[0], i[1])

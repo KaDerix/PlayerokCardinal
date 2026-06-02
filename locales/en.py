@@ -225,6 +225,8 @@ poc_init = """✅ <b><u>Playerok Cardinal initialized!</u></b>\n
 🧩 <b><i>Plugins:</i></b> @KaDerix_Shop_Bot
 👨‍💻 <b><i>Developer:</i></b> @KaDerix"""
 
+poc_init_service_hint = "\n🖥 <b><i>Server:</i></b> restart — <code>sudo pocctl restart</code>"
+
 create_test_ad_key = "Enter the name of the lot whose auto-delivery you want to test."
 
 test_ad_key_created = """✅ A one-time key for <code>{}</code> delivery has been created.\n
@@ -301,6 +303,7 @@ update_backup_not_found = "❌ Backup not found."
 update_downloaded = "✅ The update {} is downloaded (skipped {} items). Installing..."
 update_download_error = "❌ An error occurred while downloading the update."
 update_done = "✅ The update is installed! Restart the FPC with the /restart command."
+update_done_service = "✅ The update is installed! On the server run: <code>sudo pocctl restart</code>"
 update_done_exe = "✅ The update is installed! New <code>FPC.exe</code> is in <code>update</code> folder. " \
                   "Turn off <i>FPC</i>, replace old <code>FPC.exe</code> with new one and run <code>Start.bat</code>. "
 update_install_error = "❌ An error occurred while installing the update."

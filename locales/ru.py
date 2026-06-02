@@ -226,6 +226,8 @@ poc_init = """✅ <b><u>Playerok Cardinal инициализирован!</u></b
 🧩 <b><i>Плагины:</i></b> @KaDerix_Shop_Bot
 👨‍💻 <b><i>Разработчик:</i></b> @KaDerix"""
 
+poc_init_service_hint = "\n🖥 <b><i>Сервер:</i></b> перезапуск — <code>sudo pocctl restart</code>"
+
 create_test_ad_key = "Введите название лота, авто-выдачу которого вы хотите протестировать."
 
 test_ad_key_created = """✅ Одноразовый ключ для выдачи <code>{}</code> создан.\n
@@ -302,6 +304,7 @@ update_backup_not_found = "❌ Резервная копия не найдена
 update_downloaded = "✅ Обновление {} загружено (пропущено {} элементов). Установка..."
 update_download_error = "❌ Произошла ошибка при загрузке обновления."
 update_done = "✅ Обновление установлено! Перезапустите POC командой /restart."
+update_done_service = "✅ Обновление установлено! На сервере выполните: <code>sudo pocctl restart</code>"
 update_done_exe = "✅ Обновление установлено! Новый <code>POC.exe</code> находится в папке <code>update</code>. " \
                   "Выключите <i>POC</i>, замените старый <code>POC.exe</code> на новый и запустите <code>Start.bat</code>. "
 update_install_error = "❌ Произошла ошибка при установке обновления."
