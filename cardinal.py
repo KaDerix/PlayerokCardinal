@@ -115,9 +115,13 @@ class Cardinal(object):
                         except:
                             pass
 
+        pk_cfg = self.MAIN_CFG["Playerok"]
+        cookies = pk_cfg.get("cookies", "").strip()
         self.account = PlayerokAPI.Account(
-            token=self.MAIN_CFG["Playerok"]["token"],
-            user_agent=self.MAIN_CFG["Playerok"]["user_agent"],
+            token=pk_cfg["token"],
+            ddg5=pk_cfg.get("ddg5", "").strip(),
+            cookies=cookies if cookies else None,
+            user_agent=pk_cfg["user_agent"],
             proxy=self.proxy
         )
         

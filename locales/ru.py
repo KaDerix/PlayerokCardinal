@@ -596,8 +596,7 @@ ntfc_new_order_ad_disabled = "ℹ️ Товар не будет выдан, по
 ntfc_new_order_ad_disabled_for_lot = "ℹ️ Товар не будет выдан, поскольку авто-выдача отключена для данного лота."
 ntfc_new_order_user_blocked = "ℹ️ Товар не будет выдан, поскольку пользователь находится в ЧС и включена блокировка авто-выдачи."
 ntfc_new_order_will_be_delivered = "ℹ️ Товар будет выдан в ближайшее время."
-ntfc_new_review = "🔮 Вы получили {} за заказ <code>{}</code>!\n\n💬<b>Отзыв:</b>\n<code>{}</code>{}"
-ntfc_review_reply_text = "\n\n🗨️<b>Ответ:</b> \n<code>{}</code>"
+ntfc_new_review = "🔮 Вы получили {} за заказ <code>{}</code>!\n\n💬<b>Отзыв:</b>\n<code>{}</code>"
 
 # Логи cardinal.py
 crd_proxy_detected = "Обнаружен прокси."

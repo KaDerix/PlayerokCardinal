@@ -23,8 +23,7 @@ import telebot
 from telebot.apihelper import ApiTelegramException
 import logging
 
-from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, Message, CallbackQuery, BotCommand, \
-    InputFile
+from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, Message, CallbackQuery, BotCommand
 from tg_bot import utils, static_keyboards as skb, keyboards as kb, CBT
 from Utils import cardinal_tools, updater
 from locales.localizer import Localizer
@@ -399,7 +398,14 @@ class TGBot:
             self.bot.send_message(m.chat.id, _("token_incorrect_format"))
             return
         self.bot.delete_message(m.chat.id, m.id)
-        new_account = Account(token, self.cardinal.account.user_agent, proxy=self.cardinal.proxy)
+        acc = self.cardinal.account
+        new_account = Account(
+            token,
+            ddg5=acc.ddg5,
+            cookies=dict(acc.cookies),
+            user_agent=acc.user_agent,
+            proxy=self.cardinal.proxy
+        )
         try:
             new_account.get()
         except:
@@ -412,6 +418,7 @@ class TGBot:
         if new_account.id == self.cardinal.account.id or self.cardinal.account.id is None:
             one_acc = True
             self.cardinal.account.token = token
+            self.cardinal.account.cookies["token"] = token
             try:
                 self.cardinal.account.get()
                 self.cardinal.balance = self.cardinal.get_balance()
@@ -580,23 +587,33 @@ class TGBot:
             self.bot.send_message(m.chat.id, _("logfile_sending"))
             try:
                 with open("logs/log.log", "rb") as f:
-                    from datetime import datetime
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    self.bot.send_document(m.chat.id, InputFile(f, filename=f"PlayerokCardinal_log_{timestamp}.log"),
-                                           caption=f'{_("gs_old_msg_mode").replace("{} ", "") if hasattr(self.cardinal, "old_mode_enabled") and self.cardinal.old_mode_enabled else ""}')
-                    f.seek(0)
-                    file_content = f.read().decode("utf-8", errors="ignore")
-                    if "TRACEBACK" in file_content:
-                        file_content, right = file_content.rsplit("TRACEBACK", 1)
-                        file_content = "\n[".join(file_content.rsplit("\n[", 2)[-2:])
-                        right = right.split("\n[", 1)[0]  # locale
-                        result = f"<b>Текст последней ошибки:</b>\n\n[{utils.escape(file_content)}TRACEBACK{utils.escape(right)}"
-                        while result:
-                            text, result = result[:4096], result[4096:]
-                            self.bot.send_message(m.chat.id, text)
-                            time.sleep(0.5)
-                    else:
-                        self.bot.send_message(m.chat.id, "<b>Ошибок в последнем лог-файле не обнаружено.</b>")  # locale
+                    log_bytes = f.read()
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                caption = (
+                    _("gs_old_msg_mode").replace("{} ", "")
+                    if hasattr(self.cardinal, "old_mode_enabled") and self.cardinal.old_mode_enabled
+                    else ""
+                )
+                utils.send_document_named(
+                    self.bot,
+                    m.chat.id,
+                    log_bytes,
+                    f"PlayerokCardinal_log_{timestamp}.log",
+                    caption=caption,
+                )
+                file_content = log_bytes.decode("utf-8", errors="ignore")
+                if "TRACEBACK" in file_content:
+                    file_content, right = file_content.rsplit("TRACEBACK", 1)
+                    file_content = "\n[".join(file_content.rsplit("\n[", 2)[-2:])
+                    right = right.split("\n[", 1)[0]  # locale
+                    result = f"<b>Текст последней ошибки:</b>\n\n[{utils.escape(file_content)}TRACEBACK{utils.escape(right)}"
+                    while result:
+                        text, result = result[:4096], result[4096:]
+                        self.bot.send_message(m.chat.id, text)
+                        time.sleep(0.5)
+                else:
+                    self.bot.send_message(m.chat.id, "<b>Ошибок в последнем лог-файле не обнаружено.</b>")  # locale
             except Exception as e:
                 logger.error(f"Ошибка отправки лог-файла: {e}")
                 logger.debug("TRACEBACK", exc_info=True)
@@ -604,21 +621,40 @@ class TGBot:
 
     def del_logs(self, m: Message):
         """
-        Удаляет старые лог-файлы.
+        Удаляет ротированные лог-файлы (log.log.1, …) и очищает текущий logs/log.log.
         """
         if m.from_user.id not in self.authorized_users:
             self.reg_admin(m)
             return
+        logs_dir = "logs"
+        if not os.path.isdir(logs_dir):
+            self.bot.send_message(m.chat.id, _("logfile_not_found"))
+            return
         logger.info(
             f"[IMPORTANT] Удаляю логи по запросу пользователя $MAGENTA@{m.from_user.username} (id: {m.from_user.id})$RESET.")
-        deleted = 0  # locale
-        for file in os.listdir("logs"):
-            if not file.endswith(".log"):
-                try:
-                    os.remove(f"logs/{file}")
-                    deleted += 1
-                except:
-                    continue
+        deleted = 0
+        main_log = os.path.join(logs_dir, "log.log")
+        for name in os.listdir(logs_dir):
+            if not name.startswith("log.log.") or name == "log.log":
+                continue
+            path = os.path.join(logs_dir, name)
+            if not os.path.isfile(path):
+                continue
+            try:
+                os.remove(path)
+                deleted += 1
+            except OSError:
+                logger.debug("TRACEBACK", exc_info=True)
+        if os.path.isfile(main_log):
+            try:
+                with open(main_log, "w", encoding="utf-8"):
+                    pass
+                deleted += 1
+            except OSError:
+                logger.error("Не удалось очистить logs/log.log")
+                logger.debug("TRACEBACK", exc_info=True)
+                self.bot.send_message(m.chat.id, _("logfile_error"))
+                return
         self.bot.send_message(m.chat.id, _("logfile_deleted").format(deleted))
 
     def about(self, m: Message):
@@ -661,8 +697,10 @@ class TGBot:
             with open(file_path := "backup.zip", 'rb') as file:
                 modification_time = os.path.getmtime(file_path)
                 formatted_time = time.strftime('%d.%m.%Y %H:%M:%S', time.localtime(modification_time))
-                self.bot.send_document(chat_id=m.chat.id, document=InputFile(file),
-                                       caption=f'{_("update_backup")}\n\n{formatted_time}')
+                utils.send_document_named(
+                    self.bot, m.chat.id, file, "backup.zip",
+                    caption=f'{_("update_backup")}\n\n{formatted_time}',
+                )
         else:
             self.bot.send_message(m.chat.id, _("update_backup_not_found"))
 
@@ -912,29 +950,6 @@ class TGBot:
                  B(_("gl_edit"), callback_data=CBT.EDIT_ORDER_CONFIRM_REPLY_TEXT))
         self.bot.reply_to(m, _("order_confirm_changed"), reply_markup=keyboard)
 
-    def act_edit_review_reply_text(self, c: CallbackQuery):
-        stars = int(c.data.split(":")[1])
-        variables = ["v_date", "v_date_text", "v_full_date_text", "v_time", "v_full_time", "v_username",
-                     "v_order_id", "v_order_link", "v_order_title", "v_order_params",
-                     "v_order_desc_and_params", "v_order_desc_or_params", "v_game", "v_category", "v_category_fullname"]
-        text = f"{_('v_edit_review_reply_text', '⭐' * stars)}\n\n{_('v_list')}:\n" + "\n".join(_(i) for i in variables)
-        result = self.bot.send_message(c.message.chat.id, text, reply_markup=skb.CLEAR_STATE_BTN())
-        self.set_state(c.message.chat.id, result.id, c.from_user.id, CBT.EDIT_REVIEW_REPLY_TEXT, {"stars": stars})
-        self.bot.answer_callback_query(c.id)
-
-    def edit_review_reply_text(self, m: Message):
-        stars = self.get_state(m.chat.id, m.from_user.id)["data"]["stars"]
-        self.clear_state(m.chat.id, m.from_user.id, True)
-        if "ReviewReply" not in self.cardinal.MAIN_CFG:
-            self.cardinal.MAIN_CFG["ReviewReply"] = {}
-        self.cardinal.MAIN_CFG["ReviewReply"][f"star{stars}ReplyText"] = m.text
-        logger.info(_("log_review_reply_changed", m.from_user.username, m.from_user.id, stars, m.text))
-        self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
-        keyboard = K() \
-            .row(B(_("gl_back"), callback_data=f"{CBT.CATEGORY}:rr"),
-                 B(_("gl_edit"), callback_data=f"{CBT.EDIT_REVIEW_REPLY_TEXT}:{stars}"))
-        self.bot.reply_to(m, _("review_reply_changed", '⭐' * stars), reply_markup=keyboard)
-
     def open_reply_menu(self, c: CallbackQuery):
         """
         Открывает меню ответа на сообщение (callback используется в кнопках "назад").
@@ -1166,7 +1181,6 @@ class TGBot:
             "NewMessageView": kb.new_message_view_settings,
             "Greetings": kb.greeting_settings,
             "OrderConfirm": kb.order_confirm_reply_settings,
-            "ReviewReply": kb.review_reply_settings
         }
         if section == "Telegram":
             self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
@@ -1234,7 +1248,6 @@ class TGBot:
             "ar": (_("desc_ar"), skb.AR_SETTINGS, []),
             "ad": (_("desc_ad"), skb.AD_SETTINGS, []),
             "mv": (_("desc_mv"), kb.new_message_view_settings, [self.cardinal]),
-            "rr": (_("desc_or"), kb.review_reply_settings, [self.cardinal]),
             "gr": (_("desc_gr", utils.escape(self.cardinal.MAIN_CFG.get('Greetings', {}).get('greetingsText', ''))),
                    kb.greeting_settings, [self.cardinal]),
             "oc": (_("desc_oc", utils.escape(self.cardinal.MAIN_CFG.get('OrderConfirm', {}).get('replyText', ''))),
@@ -1272,20 +1285,6 @@ class TGBot:
             self.reg_admin(m)
             return
         self.bot.send_message(m.chat.id, _("desc_an"), reply_markup=kb.announcements_settings(self.cardinal, m.chat.id))
-
-    def send_review_reply_text(self, c: CallbackQuery):
-        stars = int(c.data.split(":")[1])
-        text = self.cardinal.MAIN_CFG["ReviewReply"][f"star{stars}ReplyText"]
-        keyboard = K() \
-            .row(B(_("gl_back"), callback_data=f"{CBT.CATEGORY}:rr"),
-                 B(_("gl_edit"), callback_data=f"{CBT.EDIT_REVIEW_REPLY_TEXT}:{stars}"))
-        if not text:
-            self.bot.send_message(c.message.chat.id, _("review_reply_empty", "⭐" * stars), reply_markup=keyboard)
-        else:
-            self.bot.send_message(c.message.chat.id, _("review_reply_text", "⭐" * stars,
-                                                       self.cardinal.MAIN_CFG['ReviewReply'][f'star{stars}ReplyText']),
-                                  reply_markup=keyboard)
-        self.bot.answer_callback_query(c.id)
 
     def send_old_mode_help_text(self, c: CallbackQuery):
         self.bot.answer_callback_query(c.id)
@@ -1344,9 +1343,6 @@ class TGBot:
         self.cbq_handler(self.act_edit_order_confirm_reply_text, lambda c: c.data == CBT.EDIT_ORDER_CONFIRM_REPLY_TEXT)
         self.msg_handler(self.edit_order_confirm_reply_text,
                          func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.EDIT_ORDER_CONFIRM_REPLY_TEXT))
-        self.cbq_handler(self.act_edit_review_reply_text, lambda c: c.data.startswith(f"{CBT.EDIT_REVIEW_REPLY_TEXT}:"))
-        self.msg_handler(self.edit_review_reply_text,
-                         func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.EDIT_REVIEW_REPLY_TEXT))
         self.msg_handler(self.manual_delivery_text,
                          func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.MANUAL_AD_TEST))
         self.msg_handler(self.act_ban, commands=["ban"])
@@ -1368,8 +1364,6 @@ class TGBot:
         self.msg_handler(self.restart_cardinal, commands=["restart"])
         self.msg_handler(self.ask_power_off, commands=["power_off"])
         self.msg_handler(self.send_announcements_kb, commands=["announcements"])
-        self.cbq_handler(self.send_review_reply_text, lambda c: c.data.startswith(f"{CBT.SEND_REVIEW_REPLY_TEXT}:"))
-
         self.cbq_handler(self.act_send_funpay_message, lambda c: c.data.startswith(f"{CBT.SEND_FP_MESSAGE}:"))
         self.cbq_handler(self.open_reply_menu, lambda c: c.data.startswith(f"{CBT.BACK_TO_REPLY_KB}:"))
         self.cbq_handler(self.extend_new_message_notification, lambda c: c.data.startswith(f"{CBT.EXTEND_CHAT}:"))

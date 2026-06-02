@@ -102,6 +102,20 @@
 1. Выполните команду:`wget https://raw.githubusercontent.com/KITUSTTT/PlayerokCardinal/main/install-poc.sh -O install-poc.sh && bash install-poc.sh`
 2. Следуйте инструкциям установщика. Данный скрипт автоматически установит всё необходимое и запустит бота как фоновый процесс.
 
+## 🔒 Cookie `__ddg5_` (DDoS-Guard)
+
+Playerok теперь требует cookie `__ddg5_` вместе с `token`. Без неё GraphQL может отвечать `INTERNAL_SERVER_ERROR`.
+
+1. Откройте [playerok.com](https://playerok.com) в браузере, войдите в аккаунт.
+2. DevTools (F12) → Application → Cookies → `playerok.com`.
+3. Скопируйте значения `token` и `__ddg5_` в `configs/_main.cfg`:
+   - `token` — как раньше;
+   - `ddg5` — значение `__ddg5_` (без имени cookie).
+4. Либо вставьте всю строку cookies в поле `cookies` (формат `name=value; name2=value2`).
+5. `user_agent` в конфиге должен совпадать с браузером, из которого взяты cookies.
+
+После обновления кода на VPS: `git pull` (или замените `PlayerokAPI/`) и перезапустите бота.
+
 ## 🌐 Прокси для Telegram
 
 Если Telegram заблокирован в вашей сети, укажите прокси **для доступа к Telegram-боту** (это не то же самое, что меню «Прокси» в боте — оно настраивает доступ к Playerok).

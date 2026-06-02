@@ -3,7 +3,6 @@ from typing import *
 from logging import getLogger
 from typing import Literal
 import json
-import random
 import time
 import os
 import tempfile
@@ -16,7 +15,7 @@ from . import types
 from .exceptions import *
 from .parser import *
 from .enums import *
-from .misc import PERSISTED_QUERIES
+from .misc import PERSISTED_QUERIES, QUERIES
 
 
 def get_account() -> Account | None:
@@ -30,6 +29,12 @@ class Account:
 
     :param token: Токен аккаунта.
     :type token: `str`
+
+    :param ddg5: Cookie DDoS-Guard (`__ddg5_`). Нужна для стабильной работы API.
+    :type ddg5: `str`
+
+    :param cookies: Полная строка cookies из браузера (альтернатива token+ddg5).
+    :type cookies: `str` or `dict[str, str]` or `None`
 
     :param user_agent: Юзер-агент браузера.
     :type user_agent: `str`
@@ -52,6 +57,8 @@ class Account:
     def __init__(
             self, 
             token: str, 
+            ddg5: str = "",
+            cookies: str | dict[str, str] = None,
             user_agent: str = "", 
             proxy: str = None, 
             requests_timeout: int = 15,
@@ -60,7 +67,21 @@ class Account:
         ):
         self.token = token
         """ Токен сессии аккаунта. """
-        self.user_agent = user_agent
+        self.ddg5 = ddg5
+        """ Cookie DDoS-Guard. """
+        self.cookies = cookies
+        """ Куки авторизованного аккаунта. """
+        if isinstance(cookies, str) and cookies.strip():
+            self.cookies = {
+                c.split("=")[0].strip(): c.split("=", 1)[1].strip() for c
+                in cookies.split(";") if c.strip() and "=" in c
+            }
+        if not self.cookies:
+            self.cookies = {
+                "token": self.token,
+                "__ddg5_": self.ddg5
+            }
+        self.user_agent = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
         """ Юзер-агент браузера. """
         self.requests_timeout = requests_timeout
         """ Таймаут ожидания ответов на запросы. """
@@ -146,17 +167,10 @@ class Account:
         :return: Ответа запроса requests.
         :rtype: `requests.Response`
         """
-        agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.132 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.96 Safari/537.36",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.90 Mobile Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edg/118.0.2088.62 Chrome/118.0.5993.90 Safari/537.36",
-            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:119.0) Gecko/20100101 Firefox/119.0",
-            "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Mobile Safari/537.36 OPR/88.0.0.0",
-            "Opera/9.80 (Windows NT 6.3; U; en) Presto/2.12.388 Version/12.16"
-        ]
+        try:
+            x_gql_op = payload.get("operationName", "viewer") if payload else "viewer"
+        except Exception:
+            x_gql_op = "viewer"
         _headers = {
             "accept": "*/*",
             "accept-language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -164,7 +178,7 @@ class Account:
             "apollo-require-preflight": "true",
             "apollographql-client-name": "web",
             "content-type": "application/json",
-            "cookie": f"token={self.token}",
+            "cookie": "; ".join([f"{k}={v}" for k, v in self.cookies.items()]),
             "origin": "https://playerok.com",
             "priority": "u=1, i",
             "referer": "https://playerok.com/",
@@ -180,9 +194,11 @@ class Account:
             "sec-fetch-dest": "empty",
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "same-origin",
-            "user-agent": self.user_agent if self.user_agent else random.choice(agents),
-            "x-gql-op": "viewer",
-            "x-timezone-offset": "-240"
+            "user-agent": self.user_agent,
+            "x-gql-op": x_gql_op,
+            "x-gql-path": "/",
+            "x-timezone-offset": "-240",
+            "x-apollo-operation-name": x_gql_op
         }
         headers = {k: v for k, v in _headers.items() if k not in headers.keys()}
                 
@@ -274,8 +290,7 @@ class Account:
         headers = {"accept": "*/*"}
         payload = {
             "operationName": "viewer",
-            "query": "query viewer {\n  viewer {\n    ...Viewer\n    __typename\n  }\n}\n\nfragment Viewer on User {\n  id\n  username\n  email\n  role\n  hasFrozenBalance\n  supportChatId\n  systemChatId\n  unreadChatsCounter\n  isBlocked\n  isBlockedFor\n  createdAt\n  lastItemCreatedAt\n  hasConfirmedPhoneNumber\n  canPublishItems\n  profile {\n    id\n    avatarURL\n    testimonialCounter\n    __typename\n  }\n  __typename\n}",
-            "query": "query viewer {\n  viewer {\n    ...Viewer\n    __typename\n  }\n}\n\nfragment Viewer on User {\n  id\n  username\n  email\n  role\n  hasFrozenBalance\n  supportChatId\n  systemChatId\n  unreadChatsCounter\n  isBlocked\n  isBlockedFor\n  createdAt\n  lastItemCreatedAt\n  hasConfirmedPhoneNumber\n  canPublishItems\n  profile {\n    id\n    avatarURL\n    testimonialCounter\n    __typename\n  }\n  __typename\n}",
+            "query": QUERIES.get("viewer"),
             "variables": {}
         }
         r = self.request("post", f"{self.base_url}/graphql", headers, payload)

@@ -5,12 +5,13 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from io import BytesIO
+from typing import TYPE_CHECKING, BinaryIO
 
 if TYPE_CHECKING:
     from cardinal import Cardinal
 
-from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B
+from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, InputFile
 import configparser
 import datetime
 import os.path
@@ -311,3 +312,13 @@ def generate_lot_info_text(lot_obj: configparser.SectionProxy) -> str:
 <b><i>Файл с товарами: </i></b>{file_path}\n
 <i>Обновлено:</i>  <code>{datetime.datetime.now().strftime('%H:%M:%S')}</code>"""
     return message
+
+
+def send_document_named(bot, chat_id: int | str, file_data: bytes | BinaryIO | str,
+                        filename: str, **kwargs) -> None:
+    """
+    Отправляет документ с заданным именем файла (pyTelegramBotAPI 4.x: visible_file_name).
+    """
+    if isinstance(file_data, (bytes, bytearray)):
+        file_data = BytesIO(file_data)
+    bot.send_document(chat_id, InputFile(file_data), visible_file_name=filename, **kwargs)

@@ -9,7 +9,9 @@ from Utils.config_loader import create_config_obj, load_main_config
 default_config = {
     "Playerok": {
         "token": "",
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "ddg5": "",
+        "cookies": "",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
         "autoResponse": "0",
         "autoDelivery": "0",
         "autoRestore": "0",

@@ -345,14 +345,13 @@ def send_new_review_notification(c: Cardinal, event: NewReviewEvent):
     stars = "⭐" * review_rating if review_rating else ""
     
     from tg_bot import utils
-    reply_text = ""
-    
+
     keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
-    
+
     from tg_bot.utils import NotificationTypes
     from threading import Thread
     Thread(target=c.telegram.send_notification,
-           args=(_("ntfc_new_review").format(stars, deal.id, utils.escape(review_text), reply_text),
+           args=(_("ntfc_new_review").format(stars, deal.id, utils.escape(review_text)),
                  keyboard, NotificationTypes.review),
            daemon=True).start()
 

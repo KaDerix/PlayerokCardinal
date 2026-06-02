@@ -37,6 +37,8 @@ def load_main_config(config_path: str):
     values = {
         "Playerok": {
             "token": "any",
+            "ddg5": "any+empty",
+            "cookies": "any+empty",
             "user_agent": "any+empty",
             "autoResponse": ["0", "1"],
             "autoDelivery": ["0", "1"],
@@ -106,6 +108,10 @@ def load_main_config(config_path: str):
                     config.write(f)
             elif section_name == "Telegram" and key == "proxy" and key not in section:
                 config.set("Telegram", "proxy", "")
+                with open(config_path, "w", encoding="utf-8") as f:
+                    config.write(f)
+            elif section_name == "Playerok" and key in ("ddg5", "cookies") and key not in section:
+                config.set("Playerok", key, "")
                 with open(config_path, "w", encoding="utf-8") as f:
                     config.write(f)
             

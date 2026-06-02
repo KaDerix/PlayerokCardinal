@@ -280,26 +280,6 @@ def proxy(c: Cardinal, offset: int, proxies: dict[str, bool]):
     return kb
 
 
-def review_reply_settings(c: Cardinal):
-    """
-    Генерирует клавиатуру настроек ответа на отзыв (CBT.CATEGORY:reviewReply).
-
-    :param c: объект кардинала.
-
-    :return: объект клавиатуры настроек ответа на отзыв.
-    """
-    kb = K()
-    review_reply_section = c.MAIN_CFG.get("ReviewReply", {})
-    for i in range(1, 6):
-        star_reply = review_reply_section.get(f'star{i}Reply', '0') if isinstance(review_reply_section, dict) else review_reply_section.get(f'star{i}Reply', '0')
-        kb.row(B(f"{'⭐' * i}", None, f"{CBT.SEND_REVIEW_REPLY_TEXT}:{i}"),
-               B(f"{bool_to_text(int(star_reply))}",
-                 None, f"{CBT.SWITCH}:ReviewReply:star{i}Reply"),
-               B(f"✏️", None, f"{CBT.EDIT_REVIEW_REPLY_TEXT}:{i}"))
-    kb.add(B(_("gl_back"), None, CBT.MAIN2))
-    return kb
-
-
 def notifications_settings(c: Cardinal, chat_id: int) -> K:
     """
     Генерирует клавиатуру настроек уведомлений (CBT.CATEGORY:telegram).

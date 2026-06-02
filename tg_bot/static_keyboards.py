@@ -30,7 +30,6 @@ def SETTINGS_SECTIONS_2() -> K:
     return K() \
         .add(B(_("mm_greetings"), callback_data=f"{CBT.CATEGORY}:gr")) \
         .add(B(_("mm_order_confirm"), callback_data=f"{CBT.CATEGORY}:oc")) \
-        .add(B(_("mm_review_reply"), callback_data=f"{CBT.CATEGORY}:rr")) \
         .add(B(_("mm_new_msg_view"), callback_data=f"{CBT.CATEGORY}:mv")) \
         .add(B(_("mm_blacklist"), callback_data=f"{CBT.CATEGORY}:bl")) \
         .add(B(_("mm_configs"), callback_data=CBT.CONFIG_LOADER)) \

@@ -597,8 +597,7 @@ ntfc_new_order_ad_disabled = "ℹ️ Товар не буде виданий, о
 ntfc_new_order_ad_disabled_for_lot = "ℹ️ Товар не буде виданий, оскільки авто-видача вимкнена для даного лота."
 ntfc_new_order_user_blocked = "ℹ️ Товар не буде виданий, оскільки користувач знаходиться в ЧС і включено блокування авто-видачі."
 ntfc_new_order_will_be_delivered = "ℹ️ Товар буде виданий найближчим часом."
-ntfc_new_review = "🔮 Ви отримали {} за замовлення <code>{}</code>!\n\n💬<b>Відгук:</b>\n<code>{}</code>{}"
-ntfc_review_reply_text = "\n\n🗨️<b>Відповідь:</b> \n<code>{}</code>"
+ntfc_new_review = "🔮 Ви отримали {} за замовлення <code>{}</code>!\n\n💬<b>Відгук:</b>\n<code>{}</code>"
 
 # Логи кардинала
 crd_proxy_detected = "Виявлено проксі."
