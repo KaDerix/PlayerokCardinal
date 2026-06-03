@@ -524,12 +524,35 @@ def send_deal_status_changed_notification(c: Cardinal, event: DealStatusChangedE
     Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
            daemon=True).start()
 
+def _is_stars_category_item(item) -> bool:
+    if not item:
+        return False
+    cat = getattr(item, "category", None)
+    if cat:
+        slug = (getattr(cat, "slug", None) or "").lower()
+        name = (getattr(cat, "name", None) or "").lower()
+        if slug == "stars" or "звезд" in name or name == "stars":
+            return True
+    game = getattr(item, "game", None)
+    if game and (getattr(game, "slug", None) or "").lower() == "telegram":
+        if cat and (getattr(cat, "slug", None) or "").lower() == "stars":
+            return True
+    return False
+
+
 def auto_restore_handler(c: Cardinal, event: ItemPaidEvent | ItemSentEvent):
     if not c.autorestore_enabled:
         return
     
     deal = event.deal
     if not deal or not deal.item:
+        return
+
+    if _is_stars_category_item(deal.item):
+        logger.debug(
+            "Пропуск авто-восстановления POC для Stars-лота %s — восстановление выполняет плагин fast_stars.",
+            deal.item.name,
+        )
         return
     
     from PlayerokAPI import enums

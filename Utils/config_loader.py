@@ -1,7 +1,10 @@
 import configparser
 from configparser import ConfigParser, SectionProxy
 import codecs
+import logging
 import os
+
+logger = logging.getLogger("POC.config_loader")
 
 from Utils.exceptions import (ParamNotFoundError, EmptyValueError, ValueNotValidError, SectionNotFoundError,
                               ConfigParseError, ProductsFileNotFoundError, NoProductVarError,
@@ -145,7 +148,13 @@ def load_auto_response_config(config_path: str):
             response = check_param("response", section)
             result[section_name] = {"command": command, "response": response}
         except (ParamNotFoundError, EmptyValueError) as e:
-            raise ConfigParseError(config_path, section_name, e)
+            logger.warning(
+                "Пропускаю секцию %r в %s: %s. Добавьте command: и response: или переименуйте секцию в !%s.",
+                section_name,
+                config_path,
+                e,
+                section_name.lstrip("!"),
+            )
     return result
 
 def load_raw_auto_response_config(config_path: str):
