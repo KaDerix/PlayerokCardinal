@@ -151,25 +151,94 @@ def get_tags(current_tag: str) -> list[str] | None:
         return None
 
 
-def get_next_tag(tags: list[str], current_tag: str):
+def _normalize_tag(tag: str) -> str:
+    return tag.strip().lstrip("vV")
+
+
+def _tag_tuple(tag: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for part in _normalize_tag(tag).split("."):
+        digits = ""
+        for ch in part:
+            if ch.isdigit():
+                digits += ch
+            elif digits:
+                break
+        parts.append(int(digits) if digits else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+
+def _tag_is_newer(tag: str, than: str) -> bool:
+    return _tag_tuple(tag) > _tag_tuple(than)
+
+
+def _find_tag_index(tags: list[str], current_tag: str) -> int | None:
+    norm = _normalize_tag(current_tag)
+    for i, tag in enumerate(tags):
+        if tag == current_tag or _normalize_tag(tag) == norm:
+            return i
+    return None
+
+
+def get_next_tag(tags: list[str], current_tag: str) -> str | None:
     """
-    Ищет след. тег после переданного.
-    Если не находит текущий тег, возвращает первый.
-    Если текущий тег - последний, возвращает None.
-
-    :param tags: список тегов.
-    :param current_tag: текущий тег.
-
-    :return: след. тег / первый тег / None
+    Следующий тег новее текущего (GitHub отдаёт теги от новых к старым).
     """
-    try:
-        curr_index = tags.index(current_tag)
-    except ValueError:
-        return tags[len(tags) - 1]
-
-    if not curr_index:
+    idx = _find_tag_index(tags, current_tag)
+    if idx is not None:
+        if idx == 0:
+            return None
+        return tags[idx - 1]
+    newer = [t for t in tags if _tag_is_newer(t, current_tag)]
+    if not newer:
         return None
-    return tags[curr_index - 1]
+    newer.sort(key=_tag_tuple)
+    return newer[0]
+
+
+def _fetch_all_releases() -> list[dict] | None:
+    try:
+        page = 1
+        json_response: list[dict] = []
+        max_pages = 10
+        while page <= max_pages:
+            if page != 1:
+                time.sleep(1)
+            response = requests.get(
+                f"https://api.github.com/repos/KaDerix/PlayerokCardinal/releases?page={page}",
+                headers=HEADERS,
+                timeout=10,
+            )
+            if response.status_code != 200:
+                if page == 1:
+                    return None
+                break
+            page_data = response.json()
+            if not page_data:
+                break
+            json_response.extend(page_data)
+            page += 1
+        return json_response or None
+    except Exception:
+        logger.debug("TRACEBACK", exc_info=True)
+        return None
+
+
+def get_pending_releases(current_tag: str) -> list[Release] | None:
+    """Все опубликованные релизы новее current_tag, от старых к новым."""
+    raw = _fetch_all_releases()
+    if raw is None:
+        return None
+    pending: list[Release] = []
+    for el in raw:
+        tag_name = el.get("tag_name") or ""
+        if not tag_name or not _tag_is_newer(tag_name, current_tag):
+            continue
+        pending.append(Release(tag_name, el.get("body", ""), el.get("zipball_url")))
+    pending.sort(key=lambda r: _tag_tuple(r.name))
+    return pending
 
 
 def get_releases(from_tag: str) -> list[Release] | None:
@@ -286,30 +355,33 @@ def get_new_releases(current_tag) -> int | list[Release]:
 
     :param current_tag: тег текущей версии.
 
-    :return: список объектов релизов или код ошибки:
+    :return: список объектов релизов (от старых к новым) или код ошибки:
         1 - произошла ошибка при получении списка тегов.
         2 - текущий тег является последним (или релизов нет).
         3 - не удалось получить данные о релизе.
     """
+    pending = get_pending_releases(current_tag)
+    if pending is not None:
+        if pending:
+            logger.info(_("upd_releases_found", len(pending)))
+            return pending
+        logger.info(_("upd_current_is_latest", current_tag))
+        return 2
+
     tags = get_tags(current_tag)
     if tags is None:
         logger.info(_("upd_no_tags_api"))
         return 1
 
     logger.debug(f"Список тегов: {tags}")
-    
     next_tag = get_next_tag(tags, current_tag)
     if next_tag is None:
         logger.info(_("upd_current_is_latest", current_tag))
         return 2
 
     logger.info(_("upd_next_tag_found", next_tag))
-    
-    releases = get_releases(next_tag)
-    if releases is None:
-        logger.warning(_("upd_no_releases_data"))
-        return 2  # Если релизов нет, значит текущая версия последняя
-    return releases
+    sources = f"https://github.com/KaDerix/PlayerokCardinal/archive/refs/tags/{next_tag}.zip"
+    return [Release(next_tag, f"Release {next_tag}", sources)]
 
 
 #  Загрузка нового релиза

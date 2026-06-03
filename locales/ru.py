@@ -303,8 +303,8 @@ update_backup_error = "❌ Не удалось создать резервную
 update_backup_not_found = "❌ Резервная копия не найдена."
 update_downloaded = "✅ Обновление {} загружено (пропущено {} элементов). Установка..."
 update_download_error = "❌ Произошла ошибка при загрузке обновления."
-update_done = "✅ Обновление установлено! Перезапустите POC командой /restart."
-update_done_service = "✅ Обновление установлено! На сервере: <code>sudo systemctl restart PlayerokCardinal@{}</code>"
+update_done = "✅ Обновление установлено! Напишите /restart — бот перезапустится."
+update_done_service = "✅ Обновление установлено! Напишите /restart — бот перезапустится."
 update_done_exe = "✅ Обновление установлено! Новый <code>POC.exe</code> находится в папке <code>update</code>. " \
                   "Выключите <i>POC</i>, замените старый <code>POC.exe</code> на новый и запустите <code>Start.bat</code>. "
 update_install_error = "❌ Произошла ошибка при установке обновления."

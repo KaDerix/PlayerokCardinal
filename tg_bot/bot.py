@@ -745,9 +745,6 @@ class TGBot:
 
         if getattr(sys, 'frozen', False):
             self.bot.send_message(m.chat.id, _("update_done_exe"))
-        elif os.getenv("POC_IS_RUNNING_AS_SERVICE", "0") == "1":
-            import getpass
-            self.bot.send_message(m.chat.id, _("update_done_service", getpass.getuser()))
         else:
             self.bot.send_message(m.chat.id, _("update_done"))
 
