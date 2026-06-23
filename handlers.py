@@ -540,6 +540,25 @@ def _is_stars_category_item(item) -> bool:
     return False
 
 
+def _is_steam_rent_managed_item(item) -> bool:
+    if not item or not getattr(item, "id", None):
+        return False
+    lots_path = os.path.join("storage", "plugins", "auto_steam_rent", "lots.json")
+    if not os.path.exists(lots_path):
+        return False
+    try:
+        with open(lots_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        item_id = str(item.id)
+        for lot in data.get("lots", []):
+            ref = str(lot.get("item_id") or lot.get("lot_id") or "")
+            if ref and ref == item_id:
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def auto_restore_handler(c: Cardinal, event: ItemPaidEvent | ItemSentEvent):
     if not c.autorestore_enabled:
         return
@@ -551,6 +570,13 @@ def auto_restore_handler(c: Cardinal, event: ItemPaidEvent | ItemSentEvent):
     if _is_stars_category_item(deal.item):
         logger.debug(
             "Пропуск авто-восстановления POC для Stars-лота %s — восстановление выполняет плагин fast_stars.",
+            deal.item.name,
+        )
+        return
+
+    if _is_steam_rent_managed_item(deal.item):
+        logger.debug(
+            "Пропуск авто-восстановления POC для Steam Rent лота %s — восстановление выполняет плагин auto_steam_rent.",
             deal.item.name,
         )
         return

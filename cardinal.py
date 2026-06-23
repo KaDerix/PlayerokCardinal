@@ -621,6 +621,7 @@ class Cardinal(object):
             )
 
             self.plugins[data["UUID"]] = plugin_data
+            logger.info(f"Плагин загружен: {data['NAME']} v{data['VERSION']} ({file})")
 
     def add_handlers_from_plugin(self, plugin, uuid: str | None = None):
         """

@@ -14,6 +14,7 @@ gl_edit = "✏️ Edit"
 gl_configure = "⚙️ Configure"
 gl_pcs = "pcs."
 gl_last_update = "Last update"
+gl_not_yet_scanned = "not scanned yet"
 
 # Main menu
 mm_language = "🗣️ Language"

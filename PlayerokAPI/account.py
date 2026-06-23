@@ -65,15 +65,15 @@ class Account:
         return getattr(cls, "instance")
 
     def __init__(
-        self, 
+            self, 
         token: str = None, 
         ddg5: str = "", 
         cookies: str | dict[str, str] = None,
-        user_agent: str = "", 
-        proxy: str = None, 
-        requests_timeout: int = 15,
-        **kwargs
-    ):
+            user_agent: str = "", 
+            proxy: str = None, 
+            requests_timeout: int = 15,
+            **kwargs
+        ):
         if not any((token, cookies)):
             raise TypeError("Должен быть указать один из обязательных аргументов: token или cookies")
 
@@ -234,36 +234,36 @@ class Account:
 
             for _ in range(3):
                 try:
-                    if method == "get":
-                        r = self.__curl_session.get(
-                            url=url, 
-                            params=payload, 
-                            headers=headers, 
-                            timeout=self.requests_timeout
-                        )
-                    elif method == "post":
-                        if files:
-                            r = self.__tls_requests.post(
-                                url=url, 
-                                json=payload if not files else None, 
-                                data=payload if files else None, 
-                                headers=headers, 
-                                files=files, 
-                                timeout=self.requests_timeout
-                            )
-                        else:
-                            r = self.__curl_session.post(
-                                url=url, 
-                                json=payload,
-                                headers=headers, 
-                                timeout=self.requests_timeout
-                            )
-                    return r
+            if method == "get":
+                r = self.__curl_session.get(
+                    url=url, 
+                    params=payload, 
+                    headers=headers, 
+                    timeout=self.requests_timeout
+                )
+            elif method == "post":
+                if files:
+                    r = self.__tls_requests.post(
+                        url=url, 
+                        json=payload if not files else None, 
+                        data=payload if files else None, 
+                        headers=headers, 
+                        files=files, 
+                        timeout=self.requests_timeout
+                    )
+                else:
+                    r = self.__curl_session.post(
+                        url=url, 
+                        json=payload,
+                        headers=headers, 
+                        timeout=self.requests_timeout
+                    )
+            return r
                 except Exception as e:
                     err = str(e)
                     logger.debug(f"Ошибка при отправке запроса: {e}")
                     logger.debug(f"Отправляю запрос повторно...")
-                
+
             raise RequestSendingError(url, err)
 
         sigs = [
@@ -275,7 +275,7 @@ class Account:
             "Cloudflare Ray ID"
         ]
         
-        resp = make_req()
+            resp = make_req()
         if any(sig in resp.text for sig in sigs):
             raise BotCheckDetectedException()
 
@@ -334,7 +334,7 @@ class Account:
         self.can_publish_items = data.get("canPublishItems")
         self.unread_chats_counter = data.get("unreadChatsCounter")
         self._is_initiated = True
-
+        
         headers = {"accept": "*/*"}
         payload = {
             "operationName": "user",
@@ -364,7 +364,7 @@ class Account:
             pass
         
         return self
-
+    
     def fetch_viewer_balance(self) -> types.AccountBalance | None:
         """Полный баланс (available, frozen, pendingIncome) через viewerBalance."""
         headers = {"accept": "*/*"}
@@ -521,8 +521,8 @@ class Account:
             if not sha:
                 continue
             try:
-                payload = {
-                    "operationName": "deal",
+        payload = {
+            "operationName": "deal",
                     "variables": variables,
                     "extensions": json.dumps({
                         "persistedQuery": {
@@ -530,8 +530,8 @@ class Account:
                             "sha256Hash": sha
                         }
                     })
-                }
-                r = self.request("get", f"{self.base_url}/graphql", headers, payload).json()
+        }
+        r = self.request("get", f"{self.base_url}/graphql", headers, payload).json()
                 deal_data = (r.get("data") or {}).get("deal")
                 if deal_data:
                     return item_deal(deal_data)
@@ -1104,7 +1104,7 @@ class Account:
 
         r = self.request("post", f"{self.base_url}/graphql", headers, payload).json()
         return chat(r["data"]["markChatAsRead"])
-
+    
     def upload_chat_image_into_temporary_store(
         self, 
         photo_file_path: str,
@@ -1906,7 +1906,7 @@ class Account:
         provider: TransactionProviderIds, 
         account: str, 
         value: int,
-        payment_method_id: TransactionPaymentMethodIds | None = None,
+                           payment_method_id: TransactionPaymentMethodIds | None = None,
         sbp_bank_member_id: str | None = None
     ) -> types.Transaction:
         """

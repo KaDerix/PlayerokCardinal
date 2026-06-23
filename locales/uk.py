@@ -14,6 +14,7 @@ gl_edit = "✏️ Редагувати"
 gl_configure = "⚙️ Налаштувати"
 gl_pcs = "шт."
 gl_last_update = "Останнє оновлення"
+gl_not_yet_scanned = "ще не виконувалось"
 
 # - Головне меню
 mm_language = "🗣️ Мова"

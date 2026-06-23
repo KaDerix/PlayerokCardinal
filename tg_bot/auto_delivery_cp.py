@@ -30,6 +30,17 @@ localizer = Localizer()
 _ = localizer.translate
 
 
+def _tg_profile_scan_label(crd: "Cardinal") -> str:
+    if crd.last_tg_profile_update:
+        return crd.last_tg_profile_update.strftime("%d.%m.%Y %H:%M:%S")
+    return _("gl_not_yet_scanned")
+
+
+def _ensure_tg_profile(crd: "Cardinal") -> None:
+    if crd.tg_profile is None:
+        crd.update_lots_and_categories()
+
+
 def init_auto_delivery_cp(crd: Cardinal, *args):
     tg = crd.telegram
     bot = tg.bot
@@ -95,10 +106,11 @@ def init_auto_delivery_cp(crd: Cardinal, *args):
 
     def open_fp_lots_list(c: CallbackQuery):
         """
-        Открывает список лотов FunPay.
+        Открывает список лотов Playerok.
         """
         offset = int(c.data.split(":")[1])
-        bot.edit_message_text(_("desc_ad_fp_lot_list", crd.last_telegram_lots_update.strftime("%d.%m.%Y %H:%M:%S")),
+        _ensure_tg_profile(crd)
+        bot.edit_message_text(_("desc_ad_fp_lot_list", _tg_profile_scan_label(crd)),
                               c.message.chat.id, c.message.id, reply_markup=kb.funpay_lots_list(crd, offset))
         bot.answer_callback_query(c.id)
 
@@ -409,14 +421,16 @@ $product""")  # todo
     def add_ad_to_lot(c: CallbackQuery):
         split = c.data.split(":")
         fp_lot_index, fp_lots_offset = int(split[1]), int(split[2])
-        if fp_lot_index > len(crd.tg_profile.get_common_lots()) - 1:
+        _ensure_tg_profile(crd)
+        common_lots = crd.tg_profile.get_common_lots() if crd.tg_profile else []
+        if fp_lot_index > len(common_lots) - 1:
             update_button = K().add(B(_("gl_refresh"), callback_data=f"{CBT.FP_LOTS_LIST}:0"))
             bot.edit_message_text(_("ad_lot_not_found_err", fp_lot_index),
                                   c.message.chat.id, c.message.id, reply_markup=update_button)
             bot.answer_callback_query(c.id)
             return
 
-        lot = crd.tg_profile.get_common_lots()[fp_lot_index]
+        lot = common_lots[fp_lot_index]
         if lot.title in crd.AD_CFG.sections():
             ad_lot_index = crd.AD_CFG.sections().index(lot.title)
             ad_lots_offset = ad_lot_index - 4 if ad_lot_index - 4 > 0 else 0

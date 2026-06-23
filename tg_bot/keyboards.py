@@ -494,17 +494,17 @@ def funpay_lots_list(c: Cardinal, offset: int):
     :return: объект клавиатуры со списком лотов текущего профиля.
     """
     keyboard = K()
-    lots = c.tg_profile.get_common_lots()
-    lots = lots[offset: offset + MENU_CFG.FP_LOTS_BTNS_AMOUNT]
+    all_lots = c.tg_profile.get_common_lots() if c.tg_profile else []
+    lots = all_lots[offset: offset + MENU_CFG.FP_LOTS_BTNS_AMOUNT]
     if not lots and offset != 0:
         offset = 0
-        lots = c.tg_profile.get_common_lots()[offset: offset + MENU_CFG.FP_LOTS_BTNS_AMOUNT]
+        lots = all_lots[offset: offset + MENU_CFG.FP_LOTS_BTNS_AMOUNT]
 
     for index, lot in enumerate(lots):
         keyboard.add(B(lot.description, None, f"{CBT.ADD_AD_TO_LOT}:{offset + index}:{offset}"))
 
     keyboard = add_navigation_buttons(keyboard, offset, MENU_CFG.FP_LOTS_BTNS_AMOUNT, len(lots),
-                                      len(c.tg_profile.get_common_lots()), CBT.FP_LOTS_LIST)
+                                      len(all_lots), CBT.FP_LOTS_LIST)
 
     keyboard.row(B(_("fl_manual"), None, f"{CBT.ADD_AD_TO_LOT_MANUALLY}:{offset}"),
                  B(_("gl_refresh"), None, f"update_funpay_lots:{offset}")) \
