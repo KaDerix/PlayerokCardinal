@@ -275,7 +275,7 @@ class Account:
             "Cloudflare Ray ID"
         ]
         
-            resp = make_req()
+        resp = make_req()
         if any(sig in resp.text for sig in sigs):
             raise BotCheckDetectedException()
 
