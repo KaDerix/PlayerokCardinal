@@ -521,8 +521,8 @@ class Account:
             if not sha:
                 continue
             try:
-        payload = {
-            "operationName": "deal",
+                payload = {
+                    "operationName": "deal",
                     "variables": variables,
                     "extensions": json.dumps({
                         "persistedQuery": {
@@ -530,8 +530,8 @@ class Account:
                             "sha256Hash": sha
                         }
                     })
-        }
-        r = self.request("get", f"{self.base_url}/graphql", headers, payload).json()
+                }
+                r = self.request("get", f"{self.base_url}/graphql", headers, payload).json()
                 deal_data = (r.get("data") or {}).get("deal")
                 if deal_data:
                     return item_deal(deal_data)
