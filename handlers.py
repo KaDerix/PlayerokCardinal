@@ -591,7 +591,17 @@ def auto_restore_handler(c: Cardinal, event: ItemPaidEvent | ItemSentEvent):
     logger.info(f"🚀 Запуск авто-восстановления для товара {item_name} (ID: {item_id})")
     
     try:
-        item_details = c.account.get_item(id=item_id)
+        item_details = None
+        for attempt in range(3):
+            try:
+                item_details = c.account.get_item(id=item_id)
+                break
+            except Exception as e:
+                if attempt == 2:
+                    logger.error(f"❌ Не удалось получить детали товара {item_name} (ID: {item_id}) после 3 попыток: {e}")
+                    return
+                else:
+                    time.sleep(1)
         if not item_details:
             logger.error(f"❌ Не удалось получить детали товара {item_name} (ID: {item_id})")
             return
