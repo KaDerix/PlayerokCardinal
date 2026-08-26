@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 
 from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B
 
-from Utils import ad_config as adc, MENU_CFG
+from Utils import ad_config as adc
+from tg_bot import MENU_CFG
 from tg_bot.utils import NotificationTypes, bool_to_text, add_navigation_buttons
 
 import Utils

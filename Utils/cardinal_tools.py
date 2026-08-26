@@ -455,6 +455,48 @@ def load_old_users(greetings_cooldown: float) -> dict[int, float]:
     return users
 
 
+def load_greeting_cache() -> dict[int, float]:
+    path = "storage/cache/greeted_chats.json"
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.loads(f.read())
+        return {int(k): float(v) for k, v in data.items()}
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return {}
+
+
+def save_greeting_cache(cache: dict[int, float]) -> None:
+    if not os.path.exists("storage/cache"):
+        os.makedirs("storage/cache")
+    with open("storage/cache/greeted_chats.json", "w", encoding="utf-8") as f:
+        f.write(json.dumps(cache, ensure_ascii=False))
+
+
+def should_skip_deal_greeting(chat_id: int | str, greetings_cfg: dict) -> bool:
+    only_new = greetings_cfg.get("onlyNewChats", "0") == "1"
+    try:
+        cooldown_days = float(greetings_cfg.get("greetingsCooldown", "0") or "0")
+    except ValueError:
+        cooldown_days = 0.0
+    if not only_new and cooldown_days <= 0:
+        return False
+    cache = load_greeting_cache()
+    last = cache.get(int(chat_id))
+    if last is None:
+        return False
+    if only_new:
+        return True
+    return time.time() - last < cooldown_days * 86400
+
+
+def mark_deal_greeting_sent(chat_id: int | str) -> None:
+    cache = load_greeting_cache()
+    cache[int(chat_id)] = time.time()
+    save_greeting_cache(cache)
+
+
 def create_greeting_text(cardinal: Cardinal) -> str:
     """
     Генерирует приветствие для вывода в консоль после загрузки данных о пользователе.

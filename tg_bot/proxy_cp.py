@@ -172,7 +172,12 @@ def init_proxy_cp(crd: Cardinal, *args):
             "password": password
         })
         crd.save_config(crd.MAIN_CFG, "configs/_main.cfg")
-        if crd.MAIN_CFG["Proxy"].getboolean("enable"):
+        proxy_section = crd.MAIN_CFG.get("Proxy", {})
+        if isinstance(proxy_section, dict):
+            enable = proxy_section.get("enable", "0") == "1"
+        else:
+            enable = proxy_section.getboolean("enable")
+        if enable:
             crd.account.proxy = proxy
         open_proxy_list(c)
 

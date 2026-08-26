@@ -397,7 +397,7 @@ class TGBot:
             self.reg_admin(m)
             return
         result = self.bot.send_message(m.chat.id, _("act_change_token"), reply_markup=skb.CLEAR_STATE_BTN())
-        self.set_state(m.chat.id, result.id, m.from_user.id, CBT.CHANGE_GOLDEN_KEY)
+        self.set_state(m.chat.id, result.id, m.from_user.id, CBT.CHANGE_TOKEN)
 
     def change_cookie(self, m: Message):
         """
@@ -1392,7 +1392,7 @@ class TGBot:
         self.msg_handler(self.send_profile, commands=["profile"])
         self.msg_handler(self.act_change_cookie, commands=["change_cookie", "token"])
         self.msg_handler(self.change_cookie, func=lambda m: self.check_state(m.chat.id, m.from_user.id,
-                                                                             CBT.CHANGE_GOLDEN_KEY))
+                                                                             CBT.CHANGE_TOKEN))
         self.cbq_handler(self.update_profile, lambda c: c.data == CBT.UPDATE_PROFILE)
         self.msg_handler(self.act_manual_delivery_test, commands=["test_lot"])
         self.msg_handler(self.act_upload_image, commands=["upload_chat_img", "upload_offer_img"])

@@ -647,12 +647,15 @@ Callback для активации режима ввода кулдауна пр
 User-state: ожидается сообщение с кулдауном приветственного сообщения (в днях).
 """
 
-CHANGE_GOLDEN_KEY = "65"
+CHANGE_TOKEN = "65"
 """
-Callback для активации режима ввода token.
+Callback для активации режима ввода token Playerok.
 
 User-state: ожидается сообщение с token.
 """
+
+# Обратная совместимость (старое имя из FunPay Cardinal)
+CHANGE_GOLDEN_KEY = CHANGE_TOKEN
 
 CONFIG_LOADER = "66"
 """
@@ -706,7 +709,7 @@ DELETE_PROXY = "72"
 Callback для удаления прокси.
 """
 
-MARK_DEAL_SENT = "73"
+MARK_DEAL_SENT = "76"
 """Отметить сделку отправленной. CBT.MARK_DEAL_SENT:deal_id:chat_id"""
 
 AUTO_BUMP = "74"

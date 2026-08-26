@@ -9,7 +9,7 @@ logger = logging.getLogger("POC.config_loader")
 from Utils.exceptions import (ParamNotFoundError, EmptyValueError, ValueNotValidError, SectionNotFoundError,
                               ConfigParseError, ProductsFileNotFoundError, NoProductVarError,
                               SubCommandAlreadyExists, DuplicateSectionErrorWrapper)
-from Utils.cardinal_tools import hash_password
+from Utils.cardinal_tools import hash_password, OPTIONAL_MAIN_SECTIONS
 
 def check_param(param_name: str, section: SectionProxy, valid_values: list[str | None] | None = None,
                 raise_if_not_exists: bool = True) -> str | None:
@@ -127,6 +127,18 @@ def load_main_config(config_path: str):
                     result[section_name][key] = check_param(key, section, valid_values)
             except (ParamNotFoundError, EmptyValueError, ValueNotValidError) as e:
                 raise ConfigParseError(config_path, section_name, e)
+
+    for section_name, defaults in OPTIONAL_MAIN_SECTIONS.items():
+        if section_name not in config.sections():
+            continue
+        result[section_name] = {}
+        section = config[section_name]
+        for key, default in defaults.items():
+            if key in section:
+                result[section_name][key] = section[key].strip()
+            else:
+                result[section_name][key] = default
+
     return result
 
 def load_auto_response_config(config_path: str):

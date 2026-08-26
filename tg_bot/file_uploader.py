@@ -321,7 +321,7 @@ def init_uploader(cardinal: Cardinal):
                 f"Например: <code>$photo={image_id}</code>"
         elif type_ == "offer":
             s = f"Используйте этот ID для добавления картинок к лотам."
-        bot.reply_to(m, f"✅ Изображение выгружено на сервер FunPay.\n\n"
+        bot.reply_to(m, f"✅ Изображение выгружено на Playerok.\n\n"
                         f"<b>ID:</b> <code>{image_id}</code>\n\n{s}")
 
     def upload_chat_image(m: types.Message):

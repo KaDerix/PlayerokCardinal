@@ -137,10 +137,10 @@ ord_mark_sent = "✅ Mark as sent"
 
 # Appearance of new msg. notification
 mv_incl_my_msg = "{} Show my messages"
-mv_incl_fp_msg = "{} Show FunPay messages"
+mv_incl_fp_msg = "{} Show Playerok messages"
 mv_incl_bot_msg = "{} Show bot messages"
 mv_only_my_msg = "{} Notify, if only my messages"
-mv_only_fp_msg = "{} Notify, if only FunPay messages"
+mv_only_fp_msg = "{} Notify, if only Playerok messages"
 mv_only_bot_msg = "{} Notify, if only bot messages"
 mv_show_image_name = "{} Show image names"
 
@@ -168,7 +168,7 @@ tg_block_login = "{} Block logins by password"
 prx_proxy_add = "➕ Add proxy"
 
 # Links
-lnk_github = "🛠️ Create your FunPay bot"
+lnk_github = "🛠️ Create your Playerok bot"
 lnk_updates = "🔄 Updates"
 lnk_chat = "💬 Chat"
 
@@ -196,7 +196,7 @@ access_denied = "👋 Hi, <b><i>{}</i></b>!\n\n❌ You are an unauthorized user.
 access_granted = "🔓 Access granted!\n\n" \
                  "🔕 Keep in mind that I <b><u>don't send any notifications to this chat</u></b>.\n\n" \
                  "🔔 You can set up notifications for <b><u>this chat</u></b> in the settings menu.\n\n" \
-                 "⚙️ To open the <i>FunPay Cardinal</i> settings menu, send me /menu."
+                 "⚙️ To open the <i>Playerok Cardinal</i> settings menu, send me /menu."
 
 access_granted_notification = "<b>🚨 ATTENTION! 🚨\n\n\n</b>" * 3 + "\n\n\n🔐 \"<a href=\"tg://user?id={1}\"> {0} </a>\" <b>(ID: {1}) has just accessed the Telegram Control Panel! 🔓</b>"
 
@@ -205,25 +205,25 @@ param_disabled = "❌ This parameter is disabled globally and cannot be changed 
                  "(/menu -> ⚙️ Global switches)."
 
 old_mode_help = """<b>New Message Receiving Mode</b>
-✅ <i>FPC</i> gets the full chat history and sees all data about all new messages.
-✅ <i>FPC</i> can see images in chat and forward them to <i>Telegram</i> chat.
-✅ <i>FPC</i> can determine exactly who wrote, whether it was you, your interlocutor, or a 3rd party (arbitrator).
-❌ Because <i>FPC</i> gets the full chat history to detect new messages, the chat becomes "read" (not lit orange).
+✅ <i>POC</i> gets the full chat history and sees all data about all new messages.
+✅ <i>POC</i> can see images in chat and forward them to <i>Telegram</i> chat.
+✅ <i>POC</i> can determine exactly who wrote, whether it was you, your interlocutor, or a 3rd party (arbitrator).
+❌ Because <i>POC</i> gets the full chat history to detect new messages, the chat becomes "read" (not lit orange).
 
 <b>Old Message Receiving Mode</b>
 ✅ Chats that you have not personally read remain unread (lit orange).
 ✅ Works a little bit faster than the new mode.
-❌ <i>FPC</i> doesn't get the full chat history, so it sees only the last message. If the user quickly writes several messages, <i>FPC</i> will see only the last one.
-❌ <i>FPC</i> cannot see images in chat and forward them to <i>Telegram</i> chat.
-❌ <i>FPC</i> cannot determine exactly who wrote: you or the person you are chatting with. If the chat is not read, then the message is from the interlocutor, otherwise it is from you. However, if you are viewing the chat when you receive messages, this logic can sometimes fail. Also, <i>FPC</i> will not be able to determine if a 3rd party (arbitrator) wrote into the chat.
+❌ <i>POC</i> doesn't get the full chat history, so it sees only the last message. If the user quickly writes several messages, <i>POC</i> will see only the last one.
+❌ <i>POC</i> cannot see images in chat and forward them to <i>Telegram</i> chat.
+❌ <i>POC</i> cannot determine exactly who wrote: you or the person you are chatting with. If the chat is not read, then the message is from the interlocutor, otherwise it is from you. However, if you are viewing the chat when you receive messages, this logic can sometimes fail. Also, <i>POC</i> will not be able to determine if a 3rd party (arbitrator) wrote into the chat.
 
-❗ If you click the <code>More</code> button in a new message notification, <i>FPC</i> will "read" the chat and show the last 15 messages, including images. <i>FPC</i> will also be able to determine who the author of the messages is."""
+❗ If you click the <code>More</code> button in a new message notification, <i>POC</i> will "read" the chat and show the last 15 messages, including images. <i>POC</i> will also be able to determine who the author of the messages is."""
 
 bot_started = """✅ Telegram bot is running!\n
 ✅ You can <b><u>customize configurations</u></b> and <b><u>make full use of the <i>Telegram</i> bot's functionality.</u></b>.\n
-❌ <i>FunPay Cardinal</i> is not initialized yet and none of its functions work.\n
-🔃 As soon as <i>FunPay Cardinal</i> is initialized, this message will change.\n
-📋 If <i>FPC</i> does not initialize for a long time, check the logs with /logs"""
+❌ <i>Playerok Cardinal</i> is not initialized yet and none of its functions work.\n
+🔃 As soon as <i>Playerok Cardinal</i> is initialized, this message will change.\n
+📋 If <i>POC</i> does not initialize for a long time, check the logs with /logs"""
 
 poc_init = """✅ <b><u>Playerok Cardinal initialized!</u></b>\n
 ℹ️ <b><i>Version:</i></b> <code>{}</code>
@@ -252,13 +252,13 @@ sys_info = """<b><u>Data summary</u></b>
 
 <b>CPU:</b>
 {}
-    Used by <i>FPC</i>: <code>{}%</code>
+    Used by <i>POC</i>: <code>{}%</code>
 
 <b>RAM:</b>
     Total:  <code>{} MB</code>
     Used:  <code>{} MB</code>
     Free:  <code>{} MB</code>
-    Used by <i>FPC</i>:  <code>{} MB</code>
+    Used by <i>POC</i>:  <code>{} MB</code>
 
 <b>Other:</b>
     Uptime:  <code>{}</code>
@@ -307,15 +307,15 @@ update_get_error = "❌ Failed to get new version information. Try again later."
 update_available = "<b><u>New version available!</u></b>\n\n\n{}\n\n{}"
 update_update = "To update, enter the command /update"
 update_backup = "✅ Backup of configs, storage and plugins <code>backup.zip</code>.\n\n" \
-                "⚠️ DO NOT SEND this archive to ANYONE. It contains ABSOLUTELY ALL content and settings of the bot (including golden_key and product files)."
+                "⚠️ DO NOT SEND this archive to ANYONE. It contains ABSOLUTELY ALL content and settings of the bot (including token and product files)."
 update_backup_error = "❌ Failed to back up configs, storage and plugins."
 update_backup_not_found = "❌ Backup not found."
 update_downloaded = "✅ The update {} is downloaded (skipped {} items). Installing..."
 update_download_error = "❌ An error occurred while downloading the update."
 update_done = "✅ The update is installed! Send /restart to restart the bot."
 update_done_service = "✅ The update is installed! Send /restart to restart the bot."
-update_done_exe = "✅ The update is installed! New <code>FPC.exe</code> is in <code>update</code> folder. " \
-                  "Turn off <i>FPC</i>, replace old <code>FPC.exe</code> with new one and run <code>Start.bat</code>. "
+update_done_exe = "✅ The update is installed! New <code>POC.exe</code> is in <code>update</code> folder. " \
+                  "Turn off <i>POC</i>, replace old <code>POC.exe</code> with new one and run <code>Start.bat</code>. "
 update_install_error = "❌ An error occurred while installing the update."
 
 send_backup = "Send me the backup.\n\n<b>⚠️ WARNING! Uploading backups from untrusted sources may lead to serious consequences.</b>"
@@ -336,9 +336,9 @@ power_off_cancelled = "The shutdown has been cancelled."
 power_off_error = "❌ This button does not belong to this session.\nCall this menu again."
 
 enter_msg_text = "Enter message text."
-msg_sent = "✅ Message sent to <a href=\"https://funpay.com/chat/?node={}\">{}</a> chat."
+msg_sent = "✅ Message sent to <a href=\"https://playerok.com/chats/{}\">{}</a> chat."
 msg_sent_short = "✅ Message sent."
-msg_sending_error = "❌ Failed to send a message to <a href=\"https://funpay.com/chat/?node={}\">{}</a> chat."
+msg_sending_error = "❌ Failed to send a message to <a href=\"https://playerok.com/chats/{}\">{}</a> chat."
 msg_sending_error_short = "❌ Failed to send a message to chat."
 send_img = "Send me an image."
 
@@ -384,7 +384,7 @@ ad_text_changed = "✅ The delivery text of <code>{}</code> has been changed to 
 ad_updating_lots_list = "Updating lots and categories data (it may take some time)..."
 ad_lots_list_updating_err = "❌ Failed to update lots and categories data."
 gf_not_found_err = "❌ Goods file with index <code>{}</code> not found."
-copy_lot_name = "Send the name of the lot exactly as on FunPay."
+copy_lot_name = "Send the name of the lot exactly as on Playerok."
 
 act_create_gf = "Enter the name of the new goods file."
 gf_name_invalid = "❌ Invalid file name.\n\n" \
@@ -422,10 +422,10 @@ cfg_empty_err = "❌ Config {} is empty."
 tmplt_not_found_err = "❌ Answer template with index <code>{}</code> not found."
 tmplt_already_exists_err = "❌ Such a template already exists."
 tmplt_added = "✅ Template added."
-tmplt_msg_sent = "✅ Message sent to <a href=\"https://funpay.com/chat/?node={}\">{}</a> chat.\n\n<code>{}</code>"
+tmplt_msg_sent = "✅ Message sent to <a href=\"https://playerok.com/chats/{}\">{}</a> chat.\n\n<code>{}</code>"
 
 pl_not_found_err = "❌ Plugin with UUID <code>{}</code> not found."
-pl_file_not_found_err = "❌  File <code>{}</code> not found.\nRestart <i>FPC</i> with command /restart."
+pl_file_not_found_err = "❌  File <code>{}</code> not found.\nRestart <i>POC</i> with command /restart."
 pl_commands_list = "<b><i>{}</i></b> plugin commands list."
 pl_author = "Dev"
 pl_new = "Send me a plugin.\n\n<b>⚠️ ATTENTION! Downloading plugins from questionable sources may lead to unfortunate consequences.\n" \
@@ -454,7 +454,7 @@ adv_description = """🐦 Playerok Cardinal v{}🐦
 # - Menus desc
 desc_main = "Select a settings category."
 desc_lang = desc_main
-desc_gs = "Here you can turn the basic <i>FPC</i> functions on and off."
+desc_gs = "Here you can turn the basic <i>POC</i> functions on and off."
 desc_ns = """Here you can configure notifications.\n
 <b><u>Settings are separate for each <i>Telegram</i> chat!</u></b>\n
 Current chat ID: <code>{}</code>"""
@@ -464,7 +464,7 @@ desc_ar_list = "Chose a command / commands set you are interested in."
 
 desc_ad = "Here you can change auto-delivery settings, upload/download goods files, etc."
 desc_ad_list = "This is a list of lots that have auto-delivery linked to them. Select the lot you are interested in."
-desc_ad_fp_lot_list = "This is a list of lots from your FunPay profile. Select the lot you're interested in to link auto-delivery to it.\n" \
+desc_ad_fp_lot_list = "This is a list of lots from your Playerok profile. Select the lot you're interested in to link auto-delivery to it.\n" \
                       "If a lot is missing from the list, click the  <code>🔄 Refresh</code> button.\n\n" \
                       "Last scanning: {}"
 desc_gf = "Choose a goods file you are interested in."
@@ -488,8 +488,8 @@ cmd_language = "change language"
 cmd_profile = "account statistics"
 cmd_token = "change token"
 cmd_test_lot = "create one-time delivery key"
-cmd_upload_chat_img = "(chat) upload an image to FunPay"
-cmd_upload_offer_img = "(lot) upload an image to FunPay"
+cmd_upload_chat_img = "(chat) upload an image to Playerok"
+cmd_upload_offer_img = "(lot) upload an image to Playerok"
 cmd_upload_plugin = "upload a plugin"
 cmd_ban = "add user to the blacklist"
 cmd_unban = "delete user from blacklist"
@@ -504,8 +504,8 @@ cmd_sys = "system load information"
 cmd_create_backup = "create backup"
 cmd_get_backup = "get backup"
 cmd_upload_backup = "upload backup"
-cmd_restart = "restart FPC"
-cmd_power_off = "shutdown FPC"
+cmd_restart = "restart POC"
+cmd_power_off = "shutdown POC"
 
 # - Variables desc
 v_edit_greeting_text = "Enter the text of the welcome message."
@@ -636,7 +636,7 @@ crd_profile_get_unexpected_err = "An unexpected error occurred while retrieving 
 crd_profile_get_too_many_attempts_err = "An error occurred while getting data about the lots of the account: the number of attempts ({}) was exceeded."
 crd_profile_updated = "Updated the information about profile lots $YELLOW({})$RESET and categories $YELLOW({})$RESET."
 crd_tg_profile_updated = "Updated the information about profile lots $YELLOW({})$RESET and categories $YELLOW({})$RESET (Telegram Control Panel)."
-crd_raise_time_err = "The $CYAN\"{}\"$RESET category lots could not be raised. FunPay says: \"{}\". Next attempt in {}."
+crd_raise_time_err = "The $CYAN\"{}\"$RESET category lots could not be raised. Playerok says: \"{}\". Next attempt in {}."
 crd_raise_unexpected_err = "An unexpected error occurred while trying to raise $CYAN\"{}\"$RESET catgory lots. Pause for 10 seconds."
 crd_raise_status_code_err = "Error {} when raising lots of the $CYAN\"{}\"$RESET category. Pause for 1 minute..."
 crd_lots_raised = "All lots in the $CYAN\"{}\"$RESET category are raised!"
