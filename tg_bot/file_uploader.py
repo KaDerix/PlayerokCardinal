@@ -220,7 +220,8 @@ def init_uploader(cardinal: Cardinal):
 
         bot.send_message(m.chat.id, "🔁 Проверяю валидность файла...")
         try:
-            new_config = cfg_loader.load_auto_delivery_config("storage/cache/temp_auto_delivery.cfg")
+            new_raw = cfg_loader.load_raw_auto_delivery_config("storage/cache/temp_auto_delivery.cfg")
+            new_list = cfg_loader.load_auto_delivery_config("storage/cache/temp_auto_delivery.cfg")
         except excs.ConfigParseError as e:
             bot.send_message(m.chat.id, f"❌ Произошла ошибка при обработке конфига автовыдачи: "
                                         f"<code>{utils.escape(str(e))}</code>")
@@ -235,8 +236,10 @@ def init_uploader(cardinal: Cardinal):
             logger.debug("TRACEBACK", exc_info=True)
             return
 
-        cardinal.AD_CFG = new_config
-        cardinal.save_config(cardinal.AD_CFG, "configs/auto_delivery.cfg")
+        from Utils import ad_config as adc
+        cardinal.RAW_AD_CFG = new_raw
+        cardinal.AD_CFG = new_list
+        adc.save_ad_cfg(cardinal)
 
         logger.info(f"Пользователь $MAGENTA@{m.from_user.username} (id: {m.from_user.id})$RESET "
                     f"загрузил в бота и установил конфиг автовыдачи.")

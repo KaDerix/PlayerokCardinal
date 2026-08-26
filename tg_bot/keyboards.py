@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B
 
-from tg_bot import CBT, MENU_CFG
+from Utils import ad_config as adc, MENU_CFG
 from tg_bot.utils import NotificationTypes, bool_to_text, add_navigation_buttons
 
 import Utils
@@ -198,6 +198,35 @@ def order_confirm_reply_settings(c: Cardinal):
                None, f"{CBT.SWITCH}:OrderConfirm:watermark")) \
         .add(B(_("oc_edit_message"), None, CBT.EDIT_ORDER_CONFIRM_REPLY_TEXT)) \
         .add(B(_("gl_back"), None, CBT.MAIN2))
+    return kb
+
+
+def review_reply_settings(c: Cardinal):
+    rr = c.MAIN_CFG.get("ReviewReply", {})
+    p = f"{CBT.SWITCH}:ReviewReply"
+    kb = K() \
+        .add(B(_("oc_send_reply", bool_to_text(int(rr.get("sendReply", "0")))),
+               None, f"{p}:sendReply")) \
+        .add(B(_("oc_watermark", bool_to_text(int(rr.get("watermark", "0")))),
+               None, f"{p}:watermark"))
+    for stars in range(1, 6):
+        has_text = bool(rr.get(f"reply{stars}", "").strip())
+        label = _("or_edit_reply", stars) if has_text else f"⭐ {stars} —"
+        kb.add(B(label, None, f"{CBT.EDIT_REVIEW_REPLY_TEXT}:{stars}"))
+    kb.add(B(_("gl_back"), None, CBT.MAIN2))
+    return kb
+
+
+def auto_bump_settings(c: Cardinal):
+    cfg = c.auto_bump_cfg
+    interval = int(cfg.get("interval") or 3600)
+    kb = K()
+    enabled = "🟢" if cfg.get("enabled") else "🔴"
+    kb.add(B(_("ab_enabled", enabled), None, f"{CBT.SWITCH}:AutoBump:enabled"))
+    kb.add(B(_("ab_interval", interval), None, CBT.EDIT_AUTO_BUMP_INTERVAL))
+    all_flag = "🟢" if cfg.get("all") else "🔴"
+    kb.add(B(_("ab_all_items", all_flag), None, f"{CBT.SWITCH}:AutoBump:all"))
+    kb.add(B(_("gl_back"), None, CBT.MAIN2))
     return kb
 
 
@@ -468,16 +497,17 @@ def lots_list(cardinal: Cardinal, offset: int) -> K:
     :return: объект клавиатуры со списком лотов с автовыдачей.
     """
     keyboard = K()
-    lots = cardinal.AD_CFG.sections()[offset: offset + MENU_CFG.AD_BTNS_AMOUNT]
+    sections = adc.section_names(cardinal.RAW_AD_CFG)
+    lots = sections[offset: offset + MENU_CFG.AD_BTNS_AMOUNT]
     if not lots and offset != 0:
         offset = 0
-        lots = cardinal.AD_CFG.sections()[offset: offset + MENU_CFG.AD_BTNS_AMOUNT]
+        lots = sections[offset: offset + MENU_CFG.AD_BTNS_AMOUNT]
 
     for index, lot in enumerate(lots):
         keyboard.add(B(lot, None, f"{CBT.EDIT_AD_LOT}:{offset + index}:{offset}"))
 
     keyboard = add_navigation_buttons(keyboard, offset, MENU_CFG.AD_BTNS_AMOUNT, len(lots),
-                                      len(cardinal.AD_CFG.sections()), CBT.AD_LOTS_LIST)
+                                      len(sections), CBT.AD_LOTS_LIST)
 
     keyboard.add(B(_("ad_to_ad"), None, f"{CBT.CATEGORY}:ad")) \
         .add(B(_("ad_to_mm"), None, CBT.MAIN))
@@ -523,9 +553,9 @@ def edit_lot(c: Cardinal, lot_number: int, offset: int) -> K:
 
     :return: объект клавиатуры изменения лота.
     """
-    lot = c.AD_CFG.sections()[lot_number]
-    lot_obj = c.AD_CFG[lot]
-    file_name = lot_obj.get("productsFileName")
+    lot = adc.section_names(c.RAW_AD_CFG)[lot_number]
+    lot_obj = c.RAW_AD_CFG[lot]
+    file_name = adc.goods_file_basename(lot_obj)
     kb = K() \
         .add(B(_("ea_edit_delivery_text"), None, f"{CBT.EDIT_LOT_DELIVERY_TEXT}:{lot_number}:{offset}"))
     if not file_name:
@@ -592,6 +622,7 @@ def new_order(order_id: str, username: str, node_id: str | int,
             kb.add(B(_("ord_refund"), None, f"{CBT.REQUEST_REFUND}:{order_id}:{node_id_str}"))
 
     kb.add(B(_("ord_open"), url=f"https://playerok.com/deals/{order_id}/")) \
+        .row(B(_("ord_mark_sent"), None, f"{CBT.MARK_DEAL_SENT}:{order_id}:{node_id_str}")) \
         .row(B(_("ord_answer"), None, f"{CBT.SEND_FP_MESSAGE}:{node_id_str}"),
              B(_("ord_templates"), None,
                f"{CBT.TMPLT_LIST_ANS_MODE}:0:{node_id_str}:2:{order_id}:{1 if no_refund else 0}"))

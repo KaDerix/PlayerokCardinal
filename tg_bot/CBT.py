@@ -704,8 +704,13 @@ proxy_id: int - ID proxy
 DELETE_PROXY = "72"
 """
 Callback для удаления прокси.
-Использование: CBT.DELETE_PROXY:offset:proxy_id
-
-offset: int - смещение списка прокси.
-proxy_id: int - ID proxy
 """
+
+MARK_DEAL_SENT = "73"
+"""Отметить сделку отправленной. CBT.MARK_DEAL_SENT:deal_id:chat_id"""
+
+AUTO_BUMP = "74"
+"""Меню авто-поднятия."""
+
+EDIT_AUTO_BUMP_INTERVAL = "75"
+"""Ввод интервала авто-поднятия."""

@@ -77,15 +77,26 @@ def check_proxy(proxy: dict) -> bool:
     return True
 
 def validate_proxy(proxy: str):
-    pattern = r"^((?P<login>[^:]+):(?P<password>[^@]+)@)?(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(?P<port>\d+)$"
+    proxy = proxy.strip().rstrip("/")
+    pattern = (
+        r"^((?P<login>[^:]+):(?P<password>[^@]+)@)?"
+        r"(?P<host>(?:\d{1,3}\.){3}\d{1,3}|[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?)"
+        r":(?P<port>\d+)$"
+    )
     result = re.fullmatch(pattern, proxy)
     if not result:
         raise ValueError("Неверный формат прокси.")
     login = result.group("login") or ""
     password = result.group("password") or ""
-    ip = result.group("ip")
+    host = result.group("host")
     port = result.group("port")
-    return login, password, ip, port
+    if re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", host):
+        parts = host.split(".")
+        if not all(part.isdigit() and 0 <= int(part) < 256 for part in parts):
+            raise ValueError("Неправильный IP")
+    if not port.isdigit() or not 0 < int(port) <= 65535:
+        raise ValueError("Неправильный порт")
+    return login, password, host, port
 
 
 def validate_proxy_url(proxy: str):
@@ -95,6 +106,10 @@ def validate_proxy_url(proxy: str):
     :param proxy: прокси
     :return: scheme, login, password, ip, port
     """
+    proxy = proxy.strip().rstrip("/")
+    if not proxy:
+        raise ValueError("Пустая строка прокси")
+
     if "://" in proxy:
         scheme, rest = proxy.split("://", 1)
     else:
@@ -102,17 +117,25 @@ def validate_proxy_url(proxy: str):
         rest = proxy
 
     if "@" in rest:
-        login_password, ip_port = rest.split("@", 1)
+        login_password, host_port = rest.rsplit("@", 1)
+        if ":" not in login_password:
+            raise ValueError("Неверный формат логина/пароля")
         login, password = login_password.split(":", 1)
     else:
         login, password = "", ""
-        ip_port = rest
+        host_port = rest
 
-    ip, port = ip_port.split(":")
+    if ":" not in host_port:
+        raise ValueError("Не указан порт")
+    host, port = host_port.rsplit(":", 1)
+    host = host.strip("[]")
 
-    ip_parts = ip.split(".")
-    if len(ip_parts) != 4 or not all(part.isdigit() and 0 <= int(part) < 256 for part in ip_parts):
-        raise ValueError("Неправильный IP")
+    if re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", host):
+        parts = host.split(".")
+        if not all(part.isdigit() and 0 <= int(part) < 256 for part in parts):
+            raise ValueError("Неправильный IP")
+    elif not re.fullmatch(r"[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?", host):
+        raise ValueError("Неправильный хост")
 
     if not port.isdigit() or not 0 < int(port) <= 65535:
         raise ValueError("Неправильный порт")
@@ -120,7 +143,7 @@ def validate_proxy_url(proxy: str):
     if scheme not in ("http", "https", "socks5", "socks5h"):
         raise ValueError("Схема прокси должна быть http, https, socks5 или socks5h")
 
-    return scheme, login, password, ip, port
+    return scheme, login, password, host, port
 
 
 def build_proxy(scheme: str | None, login: str, password: str, ip: str, port: str) -> str:
@@ -129,6 +152,25 @@ def build_proxy(scheme: str | None, login: str, password: str, ip: str, port: st
     if login and password:
         return f"{scheme}://{login}:{password}@{ip}:{port}"
     return f"{scheme}://{ip}:{port}"
+
+
+def resolve_telegram_proxy(main_cfg) -> str | None:
+    """Telegram proxy from [Telegram] or fallback to enabled [Proxy] section."""
+    tg_proxy = (main_cfg["Telegram"].get("proxy") or "").strip()
+    if tg_proxy:
+        return tg_proxy
+
+    if main_cfg["Proxy"].get("enable") != "1":
+        return None
+
+    ip = (main_cfg["Proxy"].get("ip") or "").strip()
+    port = (main_cfg["Proxy"].get("port") or "").strip()
+    if not ip or not port:
+        return None
+
+    login = (main_cfg["Proxy"].get("login") or "").strip()
+    password = (main_cfg["Proxy"].get("password") or "").strip()
+    return build_proxy("http", login, password, ip, port)
 
 
 def hash_password(password: str) -> str:
@@ -247,6 +289,44 @@ DEFAULT_AUTO_WITHDRAWAL = {
     "sbp_phone_number": "",
     "usdt_address": "",
 }
+
+OPTIONAL_MAIN_SECTIONS = {
+    "Greetings": {
+        "sendGreetings": "0",
+        "greetingsText": "Спасибо за покупку! Если нужна помощь — напишите в чат.",
+        "greetingsCooldown": "0",
+        "ignoreSystemMessages": "1",
+        "onlyNewChats": "0",
+    },
+    "OrderConfirm": {
+        "sendReply": "0",
+        "watermark": "1",
+        "replyText": "Спасибо за подтверждение заказа! Буду рад, если оставите отзыв.",
+    },
+    "ReviewReply": {
+        "sendReply": "0",
+        "watermark": "1",
+        "reply1": "",
+        "reply2": "",
+        "reply3": "",
+        "reply4": "",
+        "reply5": "",
+    },
+}
+
+
+def ensure_main_sections(main_cfg: dict) -> bool:
+    changed = False
+    for section, defaults in OPTIONAL_MAIN_SECTIONS.items():
+        if section not in main_cfg:
+            main_cfg[section] = dict(defaults)
+            changed = True
+            continue
+        for key, value in defaults.items():
+            if key not in main_cfg[section]:
+                main_cfg[section][key] = value
+                changed = True
+    return changed
 
 
 def load_json_config(path: str, default: dict) -> dict:

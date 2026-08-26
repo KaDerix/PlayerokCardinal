@@ -126,6 +126,15 @@ oc_watermark = "{} Message watermark"
 oc_send_reply = "{} Send message"
 oc_edit_message = "✏️ Change the text of the message"
 
+or_edit_reply = "✏️ {}★ review"
+mm_auto_bump = "⬆️ Auto bump"
+ab_enabled = "{} Auto bump"
+ab_interval = "⏱ Interval: {} sec"
+ab_edit_interval = "⏱ Change interval"
+ab_all_items = "{} All items"
+desc_ab = "Auto bump settings.\n\nInterval: <code>{}</code> sec\nLast run: <code>{}</code>"
+ord_mark_sent = "✅ Mark as sent"
+
 # Appearance of new msg. notification
 mv_incl_my_msg = "{} Show my messages"
 mv_incl_fp_msg = "{} Show FunPay messages"

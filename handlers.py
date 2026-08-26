@@ -193,21 +193,73 @@ def new_deal_welcome_handler(c: Cardinal, event: NewDealEvent):
         return
     if hasattr(deal, "user") and deal.user and str(deal.user.id) == str(c.account.id):
         return
-    for chat_id in (getattr(c.account, "system_chat_id", None), getattr(c.account, "support_chat_id", None)):
-        if chat_id and str(chat.id) == str(chat_id):
-            return
 
-    greetings_cfg = c.MAIN_CFG.get("Greetings", {}) if hasattr(c.MAIN_CFG, "get") else {}
-    if isinstance(greetings_cfg, dict) and greetings_cfg.get("sendNewDealMessage", "0") != "1":
+    greetings_cfg = c.MAIN_CFG.get("Greetings", {})
+    if greetings_cfg.get("ignoreSystemMessages", "1") == "1":
+        for chat_id in (getattr(c.account, "system_chat_id", None), getattr(c.account, "support_chat_id", None)):
+            if chat_id and str(chat.id) == str(chat_id):
+                return
+
+    if greetings_cfg.get("sendGreetings", "0") != "1":
         return
 
-    item_name = _deal_item_name(deal)
-    price_rub = _deal_price_rub(deal)
-    text = _("new_deal_chat_message", item_name, f"{price_rub:.2f}")
+    text = greetings_cfg.get("greetingsText", "").strip()
+    if not text:
+        item_name = _deal_item_name(deal)
+        price_rub = _deal_price_rub(deal)
+        text = _("new_deal_chat_message", item_name, f"{price_rub:.2f}")
     text = cardinal_tools.format_order_text(text, deal)
     buyer = _deal_buyer_username(deal)
     from threading import Thread
     Thread(target=c.send_message, args=(chat.id, text, buyer), daemon=True).start()
+
+
+def deal_confirmed_reply_handler(c: Cardinal, event: DealConfirmedEvent):
+    deal = event.deal
+    chat = event.chat
+    if not deal or not chat:
+        return
+
+    oc = c.MAIN_CFG.get("OrderConfirm", {})
+    if oc.get("sendReply", "0") != "1":
+        return
+
+    text = oc.get("replyText", "").strip()
+    if not text:
+        return
+
+    text = cardinal_tools.format_order_text(text, deal)
+    buyer = _deal_buyer_username(deal)
+    watermark = oc.get("watermark", "1") == "1"
+    from threading import Thread
+    Thread(target=c.send_message, args=(chat.id, text, buyer, watermark), daemon=True).start()
+
+
+def review_reply_handler(c: Cardinal, event: NewReviewEvent):
+    deal = event.deal
+    chat = event.chat
+    if not deal or not chat:
+        return
+
+    rr = c.MAIN_CFG.get("ReviewReply", {})
+    if rr.get("sendReply", "0") != "1":
+        return
+
+    rating = 0
+    if hasattr(deal, "review") and deal.review and hasattr(deal.review, "rating"):
+        rating = int(deal.review.rating or 0)
+    if rating < 1 or rating > 5:
+        return
+
+    text = rr.get(f"reply{rating}", "").strip()
+    if not text:
+        return
+
+    text = cardinal_tools.format_order_text(text, deal)
+    buyer = _deal_buyer_username(deal)
+    watermark = rr.get("watermark", "1") == "1"
+    from threading import Thread
+    Thread(target=c.send_message, args=(chat.id, text, buyer, watermark), daemon=True).start()
 
 
 def auto_delivery_handler(c: Cardinal, event: NewDealEvent | ItemPaidEvent):
@@ -327,6 +379,7 @@ def create_deal_keyboard(chat_id: str, username: str, deal_id: str):
         B(_("msg_reply"), None, f"{CBT.SEND_FP_MESSAGE}:{chat_id}:{username}"),
         B(_("msg_templates"), None, f"{CBT.TMPLT_LIST_ANS_MODE}:0:{chat_id}:{username}:0:0")
     )
+    keyboard.row(B(_("ord_mark_sent"), None, f"{CBT.MARK_DEAL_SENT}:{deal_id}:{chat_id}"))
     keyboard.row(B(f"🌐 {username}", url=f"https://playerok.com/chats/{chat_id}"))
     keyboard.row(B("📋 Сделка", url=f"https://playerok.com/deals/{deal_id}/"))
     return keyboard
@@ -1222,8 +1275,10 @@ def register_handlers(c: Cardinal):
     c.item_paid_handlers.append(auto_restore_handler)
     
     c.item_sent_handlers.append(send_item_sent_notification)
+    c.deal_confirmed_handlers.append(deal_confirmed_reply_handler)
     c.deal_confirmed_handlers.append(send_deal_confirmed_notification)
     c.deal_rolled_back_handlers.append(send_deal_rolled_back_notification)
+    c.new_review_handlers.append(review_reply_handler)
     c.new_review_handlers.append(send_new_review_notification)
     c.deal_has_problem_handlers.append(send_deal_has_problem_notification)
     c.deal_problem_resolved_handlers.append(send_deal_problem_resolved_notification)

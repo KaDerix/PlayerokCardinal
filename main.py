@@ -41,7 +41,7 @@ logo = """\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;
 \033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;52m>\033[0m\033[38;5;88m|\033[0m\033[38;5;124m]\033[0m\033[38;5;124m]\033[0m\033[38;5;124m+\033[0m\033[38;5;88m?\033[0m\033[38;5;88m?\033[0m\033[38;5;124m+\033[0m\033[38;5;124m+\033[0m\033[38;5;124m+\033[0m\033[38;5;124m+\033[0m\033[38;5;88m?\033[0m\033[38;5;88m?\033[0m\033[38;5;124m+\033[0m\033[38;5;124m]\033[0m\033[38;5;124m]\033[0m\033[38;5;88m|\033[0m\033[38;5;52m>\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m
 \033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m\033[38;5;0m.\033[0m"""
 
-VERSION = "1.1.4"
+VERSION = "1.1.5"
 
 Utils.cardinal_tools.set_console_title(f"Playerok Cardinal v{VERSION}")
 
@@ -98,6 +98,7 @@ try:
     RAW_AR_CFG = cfg_loader.load_raw_auto_response_config("configs/auto_response.cfg")
 
     logger.info("$MAGENTAЗагружаю конфиг auto_delivery.cfg...")
+    RAW_AD_CFG = cfg_loader.load_raw_auto_delivery_config("configs/auto_delivery.cfg")
     AD_CFG = cfg_loader.load_auto_delivery_config("configs/auto_delivery.cfg")
 except excs.ConfigParseError as e:
     logger.error(e)
@@ -117,7 +118,7 @@ except:
     sys.exit()
 
 try:
-    Cardinal(MAIN_CFG, AD_CFG, AR_CFG, RAW_AR_CFG, VERSION).init().run()
+    Cardinal(MAIN_CFG, AD_CFG, AR_CFG, RAW_AR_CFG, RAW_AD_CFG, VERSION).init().run()
 except KeyboardInterrupt:
     logger.info("Завершаю программу...")
     sys.exit()

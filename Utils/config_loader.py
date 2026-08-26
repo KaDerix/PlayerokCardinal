@@ -166,6 +166,26 @@ def load_raw_auto_response_config(config_path: str):
         config.optionxform = str
         return config
 
+def load_raw_auto_delivery_config(config_path: str):
+    try:
+        config = create_config_obj(config_path)
+        return config
+    except FileNotFoundError:
+        config = ConfigParser(delimiters=(":",), interpolation=None)
+        config.optionxform = str
+        return config
+
+
+def _resolve_goods_file(section) -> str | None:
+    raw = section.get("goods_file") or section.get("productsFileName")
+    if not raw or not raw.strip():
+        return None
+    raw = raw.strip()
+    if raw.startswith("storage/"):
+        return raw
+    return f"storage/products/{raw}"
+
+
 def load_auto_delivery_config(config_path: str):
     result = []
     try:
@@ -176,33 +196,55 @@ def load_auto_delivery_config(config_path: str):
         raise
 
     for section_name in config.sections():
-        # Пропускаем секции, начинающиеся с ! (комментарии/документация)
         if section_name.startswith("!"):
             continue
         section = config[section_name]
+        lot_id = section.get("lot_id", "").strip()
+        if not lot_id:
+            logger.warning(
+                "Пропускаю секцию %r в %s: не указан lot_id.",
+                section_name, config_path,
+            )
+            continue
+
+        goods_file = _resolve_goods_file(section)
+        if not goods_file:
+            logger.warning(
+                "Пропускаю секцию %r в %s: не привязан goods_file.",
+                section_name, config_path,
+            )
+            continue
+
         try:
-            lot_id = check_param("lot_id", section)
-            goods_file = check_param("goods_file", section)
             response = check_param("response", section)
-            
-            if not os.path.exists(goods_file):
-                raise ProductsFileNotFoundError(goods_file)
+        except (ParamNotFoundError, EmptyValueError) as e:
+            logger.warning("Пропускаю секцию %r в %s: %s.", section_name, config_path, e)
+            continue
 
-            if "$product" not in response:
-                raise NoProductVarError()
+        if not os.path.exists(goods_file):
+            logger.warning(
+                "Пропускаю секцию %r в %s: файл %r не найден.",
+                section_name, config_path, goods_file,
+            )
+            continue
 
-            entry = {
-                "lot_id": lot_id,
-                "goods_file": goods_file,
-                "response": response,
-            }
-            for opt in ("disableMultiDelivery", "disableAutoDisable", "disableAutoRestore"):
-                val = check_param(opt, section, valid_values=["0", "1"], raise_if_not_exists=False)
-                if val is not None:
-                    entry[opt] = val
-            result.append(entry)
-        except (ParamNotFoundError, EmptyValueError, ProductsFileNotFoundError, NoProductVarError) as e:
-            raise ConfigParseError(config_path, section_name, e)
+        if "$product" not in response:
+            logger.warning(
+                "Пропускаю секцию %r в %s: в response нет $product.",
+                section_name, config_path,
+            )
+            continue
+
+        entry = {
+            "lot_id": lot_id,
+            "goods_file": goods_file,
+            "response": response,
+        }
+        for opt in ("disableMultiDelivery", "disableAutoDisable", "disableAutoRestore"):
+            val = check_param(opt, section, valid_values=["0", "1"], raise_if_not_exists=False)
+            if val is not None:
+                entry[opt] = val
+        result.append(entry)
     return result
 
 

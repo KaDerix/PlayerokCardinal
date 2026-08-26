@@ -16,6 +16,7 @@ from tg_bot.static_keyboards import CLEAR_STATE_BTN
 from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, Message, CallbackQuery
 
 from Utils import cardinal_tools
+from Utils import ad_config as adc
 from locales.localizer import Localizer
 
 import itertools
@@ -59,7 +60,7 @@ def init_auto_delivery_cp(crd: Cardinal, *args):
 
         :return: True, если лот существует, False, если нет.
         """
-        if index > len(crd.AD_CFG.sections()) - 1:
+        if index > len(adc.section_names(crd.RAW_AD_CFG)) - 1:
             update_button = K().add(B(_("gl_refresh"), callback_data=f"{CBT.AD_LOTS_LIST}:0"))
             if reply_mode:
                 bot.reply_to(message_obj, _("ad_lot_not_found_err", index), reply_markup=update_button)
@@ -124,36 +125,60 @@ def init_auto_delivery_cp(crd: Cardinal, *args):
         bot.answer_callback_query(c.id)
 
     def add_lot_manually(m: Message):
-        """
-        Добавляет новый лот для автовыдачи.
-        """
         fp_lots_offset = tg.get_state(m.chat.id, m.from_user.id)["data"]["offset"]
         tg.clear_state(m.chat.id, m.from_user.id, True)
         lot = m.text.strip()
+        raw = crd.RAW_AD_CFG
 
-        if lot in crd.AD_CFG.sections():
+        if lot in adc.section_names(raw):
             error_keyboard = K() \
                 .row(B(_("gl_back"), callback_data=f"{CBT.FP_LOTS_LIST}:{fp_lots_offset}"),
                      B(_("ad_add_another_ad"), callback_data=f"{CBT.ADD_AD_TO_LOT_MANUALLY}:{fp_lots_offset}"))
             bot.reply_to(m, _("ad_lot_already_exists", utils.escape(lot)), reply_markup=error_keyboard)
             return
 
-        crd.AD_CFG.add_section(lot)
-        crd.AD_CFG.set(lot, "response", """Спасибо за покупку, $username!
+        _ensure_tg_profile(crd)
+        profile_lot = adc.find_profile_lot(crd, lot)
+        if profile_lot:
+            adc.add_lot_section(crd, lot, str(profile_lot.id))
+            logger.info(_("log_ad_linked", m.from_user.username, m.from_user.id, lot))
+            lot_index = adc.section_names(crd.RAW_AD_CFG).index(lot)
+            ad_lot_offset = utils.get_offset(lot_index, MENU_CFG.AD_BTNS_AMOUNT)
+            keyboard = K() \
+                .row(B(_("gl_back"), callback_data=f"{CBT.FP_LOTS_LIST}:{fp_lots_offset}"),
+                     B(_("ad_add_more_ad"), callback_data=f"{CBT.ADD_AD_TO_LOT_MANUALLY}:{fp_lots_offset}"),
+                     B(_("gl_configure"), callback_data=f"{CBT.EDIT_AD_LOT}:{lot_index}:{ad_lot_offset}"))
+            bot.send_message(m.chat.id, _("ad_lot_linked", lot), reply_markup=keyboard)
+            return
 
-Вот твой товар:
-$product""")  # todo
-        crd.save_config(crd.AD_CFG, "configs/auto_delivery.cfg")
-        logger.info(_("log_ad_linked", m.from_user.username, m.from_user.id, lot))
+        result = bot.send_message(
+            m.chat.id,
+            "Не нашёл товар с таким названием в профиле.\nОтправьте <b>lot_id</b> (UUID товара с Playerok):",
+            reply_markup=CLEAR_STATE_BTN(),
+        )
+        tg.set_state(m.chat.id, result.id, m.from_user.id, "ADD_AD_LOT_ID",
+                     data={"title": lot, "offset": fp_lots_offset})
 
-        lot_index = len(crd.AD_CFG.sections()) - 1
+    def add_lot_id(m: Message):
+        state = tg.get_state(m.chat.id, m.from_user.id)["data"]
+        title, fp_lots_offset = state["title"], state["offset"]
+        tg.clear_state(m.chat.id, m.from_user.id, True)
+        lot_id = m.text.strip()
+        raw = crd.RAW_AD_CFG
+
+        if adc.lot_bound(raw, lot_id):
+            bot.reply_to(m, f"❌ lot_id <code>{utils.escape(lot_id)}</code> уже привязан к другому лоту.")
+            return
+
+        adc.add_lot_section(crd, title, lot_id)
+        logger.info(_("log_ad_linked", m.from_user.username, m.from_user.id, title))
+        lot_index = adc.section_names(crd.RAW_AD_CFG).index(title)
         ad_lot_offset = utils.get_offset(lot_index, MENU_CFG.AD_BTNS_AMOUNT)
         keyboard = K() \
             .row(B(_("gl_back"), callback_data=f"{CBT.FP_LOTS_LIST}:{fp_lots_offset}"),
                  B(_("ad_add_more_ad"), callback_data=f"{CBT.ADD_AD_TO_LOT_MANUALLY}:{fp_lots_offset}"),
                  B(_("gl_configure"), callback_data=f"{CBT.EDIT_AD_LOT}:{lot_index}:{ad_lot_offset}"))
-
-        bot.send_message(m.chat.id, _("ad_lot_linked", lot), reply_markup=keyboard)
+        bot.send_message(m.chat.id, _("ad_lot_linked", title), reply_markup=keyboard)
 
     def open_gf_list(c: CallbackQuery):
         """
@@ -224,8 +249,8 @@ $product""")  # todo
             bot.answer_callback_query(c.id)
             return
 
-        lot = crd.AD_CFG.sections()[lot_index]
-        lot_obj = crd.AD_CFG[lot]
+        lot = adc.section_names(crd.RAW_AD_CFG)[lot_index]
+        lot_obj = crd.RAW_AD_CFG[lot]
 
         bot.edit_message_text(utils.generate_lot_info_text(lot_obj), c.message.chat.id, c.message.id,
                               reply_markup=kb.edit_lot(crd, lot_index, offset))
@@ -257,17 +282,17 @@ $product""")  # todo
             return
 
         new_response = m.text.strip()
-        lot = crd.AD_CFG.sections()[lot_index]
-        lot_obj = crd.AD_CFG[lot]
+        lot = adc.section_names(crd.RAW_AD_CFG)[lot_index]
+        lot_obj = crd.RAW_AD_CFG[lot]
         keyboard = K().row(B(_("gl_back"), callback_data=f"{CBT.EDIT_AD_LOT}:{lot_index}:{offset}"),
                            B(_("gl_edit"), callback_data=f"{CBT.EDIT_LOT_DELIVERY_TEXT}:{lot_index}:{offset}"))
 
-        if lot_obj.get("productsFileName") is not None and "$product" not in new_response:
+        if adc.goods_file_path(lot_obj) and "$product" not in new_response:
             bot.reply_to(m, _("ad_product_var_err", utils.escape(lot)), reply_markup=keyboard)
             return
 
-        crd.AD_CFG.set(lot, "response", new_response)
-        crd.save_config(crd.AD_CFG, "configs/auto_delivery.cfg")
+        crd.RAW_AD_CFG.set(lot, "response", new_response)
+        adc.save_ad_cfg(crd)
         logger.info(_("log_ad_text_changed", m.from_user.username, m.from_user.id, lot, new_response))
         bot.reply_to(m, _("ad_text_changed", utils.escape(lot), utils.escape(new_response)), reply_markup=keyboard)
 
@@ -292,8 +317,8 @@ $product""")  # todo
         if not check_ad_lot_exists(lot_index, m):
             return
 
-        lot = crd.AD_CFG.sections()[lot_index]
-        lot_obj = crd.AD_CFG[lot]
+        lot = adc.section_names(crd.RAW_AD_CFG)[lot_index]
+        lot_obj = crd.RAW_AD_CFG[lot]
         file_name = m.text.strip()
         exists = 1
 
@@ -307,8 +332,11 @@ $product""")  # todo
                  B(_("ea_link_another_gf"), callback_data=f"{CBT.BIND_PRODUCTS_FILE}:{lot_index}:{offset}"))
 
         if file_name == "-":
-            crd.AD_CFG.remove_option(lot, "productsFileName")
-            crd.save_config(crd.AD_CFG, "configs/auto_delivery.cfg")
+            if crd.RAW_AD_CFG.has_option(lot, "goods_file"):
+                crd.RAW_AD_CFG.remove_option(lot, "goods_file")
+            if crd.RAW_AD_CFG.has_option(lot, "productsFileName"):
+                crd.RAW_AD_CFG.remove_option(lot, "productsFileName")
+            adc.save_ad_cfg(crd)
             logger.info(_("log_gf_unlinked", m.from_user.username, m.from_user.id, lot))
             bot.reply_to(m, _("ad_gf_unlinked", utils.escape(lot)), reply_markup=keyboard)
             return
@@ -332,8 +360,8 @@ $product""")  # todo
                 bot.reply_to(m, _("gf_creation_err", file_name), reply_markup=keyboard)
                 return
 
-        crd.AD_CFG.set(lot, "productsFileName", file_name)
-        crd.save_config(crd.AD_CFG, "configs/auto_delivery.cfg")
+        crd.RAW_AD_CFG.set(lot, "goods_file", f"storage/products/{file_name}")
+        adc.save_ad_cfg(crd)
 
         if exists:
             logger.info(_("log_gf_linked", m.from_user.username, m.from_user.id, file_name, lot))
@@ -352,11 +380,11 @@ $product""")  # todo
             bot.answer_callback_query(c.id)
             return
 
-        lot = crd.AD_CFG.sections()[lot_number]
-        lot_obj = crd.AD_CFG[lot]
+        lot = adc.section_names(crd.RAW_AD_CFG)[lot_number]
+        lot_obj = crd.RAW_AD_CFG[lot]
         value = str(int(not lot_obj.getboolean(param)))
-        crd.AD_CFG.set(lot, param, value)
-        crd.save_config(crd.AD_CFG, "configs/auto_delivery.cfg")
+        crd.RAW_AD_CFG.set(lot, param, value)
+        adc.save_ad_cfg(crd)
         logger.info(_("log_param_changed", c.from_user.username, c.from_user.id, param, lot, value))
         bot.edit_message_text(utils.generate_lot_info_text(lot_obj), c.message.chat.id, c.message.id,
                               reply_markup=kb.edit_lot(crd, lot_number, offset))
@@ -373,7 +401,7 @@ $product""")  # todo
             bot.answer_callback_query(c.id)
             return
 
-        lot_name = crd.AD_CFG.sections()[lot_index]
+        lot_name = adc.section_names(crd.RAW_AD_CFG)[lot_index]
         key = "".join(random.sample(string.ascii_letters + string.digits, 50))
         crd.delivery_tests[key] = lot_name
 
@@ -396,9 +424,9 @@ $product""")  # todo
             bot.answer_callback_query(c.id)
             return
 
-        lot = crd.AD_CFG.sections()[lot_number]
-        crd.AD_CFG.remove_section(lot)
-        crd.save_config(crd.AD_CFG, "configs/auto_delivery.cfg")
+        lot = adc.section_names(crd.RAW_AD_CFG)[lot_number]
+        crd.RAW_AD_CFG.remove_section(lot)
+        adc.save_ad_cfg(crd)
 
         logger.info(_("log_ad_deleted", c.from_user.username, c.from_user.id, lot))
         bot.edit_message_text(_("desc_ad_list"), c.message.chat.id, c.message.id,
@@ -431,8 +459,10 @@ $product""")  # todo
             return
 
         lot = common_lots[fp_lot_index]
-        if lot.title in crd.AD_CFG.sections():
-            ad_lot_index = crd.AD_CFG.sections().index(lot.title)
+        raw = crd.RAW_AD_CFG
+        if lot.title in adc.section_names(raw) or adc.lot_bound(raw, str(lot.id)):
+            section = lot.title if lot.title in adc.section_names(raw) else adc.lot_bound(raw, str(lot.id))
+            ad_lot_index = adc.section_names(raw).index(section)
             ad_lots_offset = ad_lot_index - 4 if ad_lot_index - 4 > 0 else 0
 
             keyboard = K() \
@@ -443,11 +473,9 @@ $product""")  # todo
             bot.answer_callback_query(c.id)
             return
 
-        crd.AD_CFG.add_section(lot.title)
-        crd.AD_CFG.set(lot.title, "response", "Спасибо за покупку, $username!\n\nВот твой товар:\n\n$product")  # todo
-        crd.save_config(crd.AD_CFG, "configs/auto_delivery.cfg")
+        adc.add_lot_section(crd, lot.title, str(lot.id))
 
-        ad_lot_index = len(crd.AD_CFG.sections()) - 1
+        ad_lot_index = adc.section_names(crd.RAW_AD_CFG).index(lot.title)
         ad_lots_offset = utils.get_offset(ad_lot_index, MENU_CFG.AD_BTNS_AMOUNT)
         keyboard = K() \
             .row(B(_("gl_back"), callback_data=f"{CBT.FP_LOTS_LIST}:{fp_lots_offset}"),
@@ -473,7 +501,10 @@ $product""")  # todo
         file_name = files[file_index]
         products_amount = cardinal_tools.count_products(f"storage/products/{file_name}")
         nl = "\n"
-        delivery_objs = [i for i in crd.AD_CFG.sections() if crd.AD_CFG[i].get("productsFileName") == file_name]
+        delivery_objs = [
+            name for name in adc.section_names(crd.RAW_AD_CFG)
+            if adc.goods_file_basename(crd.RAW_AD_CFG[name]) == file_name
+        ]
 
         text = f"""<b><u>{file_name}</u></b>\n
 <b><i>{_('gf_amount')}:</i></b>  <code>{products_amount}</code>\n
@@ -603,8 +634,10 @@ $product""")  # todo
 
         file_name = files[file_index]
 
-        delivery_objs = [i for i in crd.AD_CFG.sections() if
-                         crd.AD_CFG[i].get("productsFileName") == file_name]
+        delivery_objs = [
+            name for name in adc.section_names(crd.RAW_AD_CFG)
+            if adc.goods_file_basename(crd.RAW_AD_CFG[name]) == file_name
+        ]
         if delivery_objs:
             keyboard = K().add(B(_("gl_back"), callback_data=f"{CBT.EDIT_PRODUCTS_FILE}:{file_index}:{offset}"))
             bot.edit_message_text(_("gf_linked_err", file_name),
@@ -635,6 +668,8 @@ $product""")  # todo
     tg.cbq_handler(act_add_lot_manually, lambda c: c.data.startswith(f"{CBT.ADD_AD_TO_LOT_MANUALLY}:"))
     tg.msg_handler(add_lot_manually,
                    func=lambda m: tg.check_state(m.chat.id, m.from_user.id, CBT.ADD_AD_TO_LOT_MANUALLY))
+    tg.msg_handler(add_lot_id,
+                   func=lambda m: tg.check_state(m.chat.id, m.from_user.id, "ADD_AD_LOT_ID"))
 
     tg.cbq_handler(open_gf_list, lambda c: c.data.startswith(f"{CBT.PRODUCTS_FILES_LIST}:"))
 

@@ -32,14 +32,25 @@ logger = logging.getLogger("TGBot")
 localizer = Localizer()
 _ = localizer.translate
 telebot.apihelper.ENABLE_MIDDLEWARE = True
+telebot.apihelper.READ_TIMEOUT = 60
+telebot.apihelper.CONNECT_TIMEOUT = 20
+
+
+def _apply_telegram_proxy(cardinal: Cardinal) -> str | None:
+    proxy = cardinal_tools.resolve_telegram_proxy(cardinal.MAIN_CFG)
+    if proxy:
+        telebot.apihelper.proxy = {"https": proxy, "http": proxy}
+        logger.info("Telegram proxy: %s", proxy.split("@")[-1] if "@" in proxy else proxy)
+    else:
+        telebot.apihelper.proxy = None
+        logger.warning("Telegram proxy не задан — api.telegram.org может быть недоступен с сервера")
+    return proxy
 
 
 class TGBot:
     def __init__(self, cardinal: Cardinal):
         self.cardinal = cardinal
-        if cardinal.MAIN_CFG["Telegram"]["proxy"]:
-            telebot.apihelper.proxy = {"https": cardinal.MAIN_CFG["Telegram"]["proxy"],
-                                       "http": cardinal.MAIN_CFG["Telegram"]["proxy"]}
+        _apply_telegram_proxy(cardinal)
         self.bot = telebot.TeleBot(self.cardinal.MAIN_CFG["Telegram"]["token"], parse_mode="HTML",
                                    allow_sending_without_reply=True, num_threads=5)
 
@@ -560,19 +571,16 @@ class TGBot:
             self.bot.reply_to(m, _("watermark_error"))
             return
 
-        preview = f"<a href=\"https://sfunpay.com/s/chat/zb/wl/zbwl4vwc8cc1wsftqnx5.jpg\">⁢</a>" if not \
-            utils.has_brand_mark(watermark) else \
-            f"<a href=\"https://sfunpay.com/s/chat/kd/8i/kd8isyquw660kcueck3g.jpg\">⁢</a>"
         if "Other" not in self.cardinal.MAIN_CFG:
             self.cardinal.MAIN_CFG["Other"] = {}
         self.cardinal.MAIN_CFG["Other"]["watermark"] = watermark
         self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
         if watermark:
             logger.info(_("log_watermark_changed", m.from_user.username, m.from_user.id, watermark))
-            self.bot.reply_to(m, preview + _("watermark_changed", watermark))
+            self.bot.reply_to(m, _("watermark_changed", watermark))
         else:
             logger.info(_("log_watermark_deleted", m.from_user.username, m.from_user.id))
-            self.bot.reply_to(m, preview + _("watermark_deleted"))
+            self.bot.reply_to(m, _("watermark_deleted"))
 
     def send_logs(self, m: Message):
         """
@@ -950,6 +958,40 @@ class TGBot:
                  B(_("gl_edit"), callback_data=CBT.EDIT_ORDER_CONFIRM_REPLY_TEXT))
         self.bot.reply_to(m, _("order_confirm_changed"), reply_markup=keyboard)
 
+    def act_edit_review_reply_text(self, c: CallbackQuery):
+        stars = int(c.data.split(":")[1])
+        variables = ["v_date", "v_date_text", "v_full_date_text", "v_time", "v_full_time", "v_username",
+                     "v_order_id", "v_order_link", "v_order_title", "v_game", "v_category", "v_category_fullname"]
+        text = f"{_('v_edit_review_reply_text', stars)}\n\n{_('v_list')}:\n" + "\n".join(_(i) for i in variables)
+        result = self.bot.send_message(c.message.chat.id, text, reply_markup=skb.CLEAR_STATE_BTN())
+        self.set_state(c.message.chat.id, result.id, c.from_user.id, CBT.EDIT_REVIEW_REPLY_TEXT, {"stars": stars})
+        self.bot.answer_callback_query(c.id)
+
+    def edit_review_reply_text(self, m: Message):
+        state = self.get_state(m.chat.id, m.from_user.id)
+        stars = state["data"]["stars"]
+        self.clear_state(m.chat.id, m.from_user.id, True)
+        if "ReviewReply" not in self.cardinal.MAIN_CFG:
+            self.cardinal.MAIN_CFG["ReviewReply"] = {}
+        self.cardinal.MAIN_CFG["ReviewReply"][f"reply{stars}"] = m.text
+        logger.info(_("log_review_reply_changed", m.from_user.username, m.from_user.id, stars, m.text))
+        self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
+        keyboard = K() \
+            .row(B(_("gl_back"), callback_data=f"{CBT.CATEGORY}:or"),
+                 B(_("or_edit_reply", stars), callback_data=f"{CBT.EDIT_REVIEW_REPLY_TEXT}:{stars}"))
+        self.bot.reply_to(m, _("review_reply_changed", stars), reply_markup=keyboard)
+
+    def mark_deal_sent(self, c: CallbackQuery):
+        split = c.data.split(":")
+        deal_id, chat_id = split[1], split[2]
+        try:
+            from PlayerokAPI.enums import ItemDealStatuses
+            self.cardinal.account.update_deal(deal_id, ItemDealStatuses.SENT)
+            self.bot.answer_callback_query(c.id, "✅ Сделка отмечена отправленной")
+        except Exception as e:
+            logger.error(f"mark_deal_sent {deal_id}: {e}")
+            self.bot.answer_callback_query(c.id, _("msg_sending_error_short"), show_alert=True)
+
     def open_reply_menu(self, c: CallbackQuery):
         """
         Открывает меню ответа на сообщение (callback используется в кнопках "назад").
@@ -1164,6 +1206,22 @@ class TGBot:
         """
         split = c.data.split(":")
         section, option = split[1], split[2]
+
+        if section == "AutoBump":
+            cfg = self.cardinal.auto_bump_cfg
+            if option == "enabled":
+                cfg["enabled"] = not cfg.get("enabled", False)
+                self.cardinal.MAIN_CFG.setdefault("Playerok", {})["autoRaise"] = "1" if cfg["enabled"] else "0"
+                cardinal_tools.save_json_config("configs/auto_bump.json", cfg)
+                self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
+            elif option == "all":
+                cfg["all"] = not cfg.get("all", False)
+                cardinal_tools.save_json_config("configs/auto_bump.json", cfg)
+            self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
+                                               reply_markup=kb.auto_bump_settings(self.cardinal))
+            self.bot.answer_callback_query(c.id)
+            return
+
         if (section == "FunPay" or section == "Playerok") and option == "oldMsgGetMode":
             self.cardinal.switch_msg_get_mode()
         else:
@@ -1176,11 +1234,12 @@ class TGBot:
 
         sections = {
             "FunPay": kb.main_settings,
-            "Playerok": kb.main_settings,  # Playerok использует те же настройки что и FunPay
+            "Playerok": kb.main_settings,
             "BlockList": kb.blacklist_settings,
             "NewMessageView": kb.new_message_view_settings,
             "Greetings": kb.greeting_settings,
             "OrderConfirm": kb.order_confirm_reply_settings,
+            "ReviewReply": kb.review_reply_settings,
         }
         if section == "Telegram":
             self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
@@ -1251,7 +1310,11 @@ class TGBot:
             "gr": (_("desc_gr", utils.escape(self.cardinal.MAIN_CFG.get('Greetings', {}).get('greetingsText', ''))),
                    kb.greeting_settings, [self.cardinal]),
             "oc": (_("desc_oc", utils.escape(self.cardinal.MAIN_CFG.get('OrderConfirm', {}).get('replyText', ''))),
-                   kb.order_confirm_reply_settings, [self.cardinal])
+                   kb.order_confirm_reply_settings, [self.cardinal]),
+            "or": (_("desc_or"), kb.review_reply_settings, [self.cardinal]),
+            "ab": (_("desc_ab", self.cardinal.auto_bump_cfg.get("interval", 3600),
+                    self.cardinal.auto_bump_cfg.get("last_time") or "—"),
+                   kb.auto_bump_settings, [self.cardinal]),
         }
 
         curr = sections[section]
@@ -1343,6 +1406,10 @@ class TGBot:
         self.cbq_handler(self.act_edit_order_confirm_reply_text, lambda c: c.data == CBT.EDIT_ORDER_CONFIRM_REPLY_TEXT)
         self.msg_handler(self.edit_order_confirm_reply_text,
                          func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.EDIT_ORDER_CONFIRM_REPLY_TEXT))
+        self.cbq_handler(self.act_edit_review_reply_text, lambda c: c.data.startswith(f"{CBT.EDIT_REVIEW_REPLY_TEXT}:"))
+        self.msg_handler(self.edit_review_reply_text,
+                         func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.EDIT_REVIEW_REPLY_TEXT))
+        self.cbq_handler(self.mark_deal_sent, lambda c: c.data.startswith(f"{CBT.MARK_DEAL_SENT}:"))
         self.msg_handler(self.manual_delivery_text,
                          func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.MANUAL_AD_TEST))
         self.msg_handler(self.act_ban, commands=["ban"])
@@ -1455,19 +1522,37 @@ class TGBot:
         for lang in (None, *localizer.languages.keys()):
             commands = []
             for cmd in self.commands:
-                # Если значение - это ключ локализации (начинается с "cmd_"), переводим его
-                # Если значение - это уже текст (от плагина), используем как есть
                 help_text = self.commands[cmd]
                 if help_text.startswith("cmd_") and hasattr(localizer, 'translate'):
-                    # Это ключ локализации, переводим
                     translated = _(help_text, language=lang)
                 else:
-                    # Это уже текст от плагина, используем как есть
                     translated = help_text
                 commands.append(BotCommand(f"/{cmd}", translated))
-            self.bot.set_my_commands(commands, language_code=lang)
+            for attempt in range(3):
+                try:
+                    self.bot.set_my_commands(commands, language_code=lang)
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        logger.warning(
+                            "Не удалось установить меню команд Telegram (lang=%s): %s",
+                            lang, e,
+                        )
+                        logger.debug("TRACEBACK", exc_info=True)
+                    else:
+                        time.sleep(2)
 
     def edit_bot(self):
+        """
+        Изменяет описания и название бота.
+        """
+        try:
+            self._edit_bot()
+        except Exception as e:
+            logger.warning("Не удалось обновить описание Telegram-бота: %s", e)
+            logger.debug("TRACEBACK", exc_info=True)
+
+    def _edit_bot(self):
         """
         Изменяет описания и название бота.
         """

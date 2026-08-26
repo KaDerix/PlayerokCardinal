@@ -42,7 +42,28 @@ default_config = {
     "Other": {
         "watermark": "🎮",
         "requestsDelay": "4"
-    }
+    },
+    "Greetings": {
+        "sendGreetings": "0",
+        "greetingsText": "Спасибо за покупку! Если нужна помощь — напишите в чат.",
+        "greetingsCooldown": "0",
+        "ignoreSystemMessages": "1",
+        "onlyNewChats": "0",
+    },
+    "OrderConfirm": {
+        "sendReply": "0",
+        "watermark": "1",
+        "replyText": "Спасибо за подтверждение заказа! Буду рад, если оставите отзыв.",
+    },
+    "ReviewReply": {
+        "sendReply": "0",
+        "watermark": "1",
+        "reply1": "",
+        "reply2": "",
+        "reply3": "",
+        "reply4": "",
+        "reply5": "",
+    },
 }
 
 def create_configs():

@@ -70,6 +70,7 @@ class Cardinal(object):
                  auto_delivery_config: list,
                  auto_response_config: dict,
                  raw_auto_response_config: ConfigParser,
+                 raw_auto_delivery_config: ConfigParser,
                  version: str):
         self.VERSION = version
         
@@ -77,6 +78,13 @@ class Cardinal(object):
         self.AD_CFG = auto_delivery_config
         self.AR_CFG = auto_response_config
         self.RAW_AR_CFG = raw_auto_response_config
+        self.RAW_AD_CFG = raw_auto_delivery_config
+        
+        from Utils import ad_config as adc
+        adc.migrate_raw_cfg(self.RAW_AD_CFG)
+
+        if cardinal_tools.ensure_main_sections(self.MAIN_CFG):
+            self.save_config(self.MAIN_CFG, "configs/_main.cfg")
         
         self.proxy = None
         self.proxy_dict = cardinal_tools.load_proxy_dict()
@@ -327,9 +335,9 @@ class Cardinal(object):
         if self.MAIN_CFG["Telegram"].get("enabled") == "1":
             self.__init_telegram()
             try:
-                from tg_bot import auto_response_cp, auto_delivery_cp, config_loader_cp, templates_cp, plugins_cp, \
+                from tg_bot import auto_response_cp, auto_delivery_cp, auto_bump_cp, config_loader_cp, templates_cp, plugins_cp, \
                                    file_uploader, authorized_users_cp, proxy_cp, default_cp
-                for module in [auto_response_cp, auto_delivery_cp, config_loader_cp, templates_cp, plugins_cp,
+                for module in [auto_response_cp, auto_delivery_cp, auto_bump_cp, config_loader_cp, templates_cp, plugins_cp,
                                file_uploader, authorized_users_cp, proxy_cp, default_cp]:
                     try:
                         self.add_handlers_from_plugin(module)

@@ -250,34 +250,57 @@ def add_navigation_buttons(keyboard_obj: K, curr_offset: int,
 
 
 def generate_profile_text(cardinal: Cardinal) -> str:
-    """
-    Генерирует текст с информацией об аккаунте.
-
-    :return: сгенерированный текст с информацией об аккаунте.
-    """
-    account = cardinal.account  # locale
+    account = cardinal.account
     balance = cardinal.balance
     if balance is None:
         balance = cardinal.get_balance()
-    
-    # Получаем статистику аккаунта
+
     active_deals = 0
+    rating = 0.0
+    reviews_count = 0
+    active_lots = 0
+
     try:
-        if hasattr(account, 'profile') and account.profile and hasattr(account.profile, 'stats'):
-            if hasattr(account.profile.stats, 'deals') and account.profile.stats.deals:
-                if hasattr(account.profile.stats.deals, 'incoming') and account.profile.stats.deals.incoming:
-                    active_deals = getattr(account.profile.stats.deals.incoming, 'total', 0)
-    except:
+        if not hasattr(account, "profile") or not account.profile:
+            account.get()
+        profile = account.profile
+        if profile:
+            rating = float(getattr(profile, "rating", 0) or 0)
+            reviews_count = int(getattr(profile, "reviews_count", 0) or 0)
+    except Exception:
         pass
-    
+
+    try:
+        if cardinal.tg_profile:
+            active_lots = len(cardinal.tg_profile.get_common_lots())
+        elif hasattr(account, "profile") and account.profile:
+            items = account.profile.get_items(count=24)
+            active_lots = len(getattr(items, "items", []) or [])
+    except Exception:
+        pass
+
+    try:
+        from PlayerokAPI.enums import ItemDealStatuses, ItemDealDirections
+        deals = account.get_deals(
+            count=24,
+            statuses=[ItemDealStatuses.PAID, ItemDealStatuses.PENDING],
+            direction=ItemDealDirections.IN,
+        )
+        if deals:
+            active_deals = getattr(deals, "total_count", None) or len(getattr(deals, "deals", []) or [])
+    except Exception:
+        pass
+
     from Utils.playerok_money import balance_display_rub
     balance_rub, balance_available, balance_frozen = balance_display_rub(balance)
-    
+
     return f"""Статистика аккаунта <b><i>{account.username}</i></b>
 
 <b>ID:</b> <code>{account.id}</code>
-<b>Незавершенных сделок:</b> <code>{active_deals}</code>
-<b>Баланс:</b> 
+<b>Рейтинг:</b> <code>{rating:.1f}</code> ({reviews_count} отз.)
+<b>Товаров:</b> <code>{active_lots}</code>
+<b>Сделок в работе:</b> <code>{active_deals}</code>
+<b>Баланс:</b>
     <b>Общий:</b> <code>{balance_rub:.2f}₽</code>
     <b>Доступно:</b> <code>{balance_available:.2f}₽</code>
     <b>Заморожено:</b> <code>{balance_frozen:.2f}₽</code>
@@ -286,30 +309,27 @@ def generate_profile_text(cardinal: Cardinal) -> str:
 
 
 def generate_lot_info_text(lot_obj: configparser.SectionProxy) -> str:
-    """
-    Генерирует текст с информацией о лоте.
+    from Utils import ad_config as adc
 
-    :param lot_obj: секция лота в конфиге автовыдачи.
-
-    :return: сгенерированный текст с информацией о лоте.
-    """
-    if lot_obj.get("productsFileName") is None:
-        file_path = "<b><u>не привязан.</u></b>"  # locale
+    gf_path = adc.goods_file_path(lot_obj)
+    lot_id = lot_obj.get("lot_id", "—")
+    if not gf_path:
+        file_path = "<b><u>не привязан.</u></b>"
         products_amount = "<code>∞</code>"
     else:
-        file_path = f"<code>storage/products/{lot_obj.get('productsFileName')}</code>"
-        if not os.path.exists(f"storage/products/{lot_obj.get('productsFileName')}"):
-            with open(f"storage/products/{lot_obj.get('productsFileName')}", "w", encoding="utf-8"):
+        file_path = f"<code>{escape(gf_path)}</code>"
+        if not os.path.exists(gf_path):
+            os.makedirs(os.path.dirname(gf_path), exist_ok=True)
+            with open(gf_path, "w", encoding="utf-8"):
                 pass
-        products_amount = Utils.cardinal_tools.count_products(f"storage/products/{lot_obj.get('productsFileName')}")
-        products_amount = f"<code>{products_amount}</code>"
-    # locale
-    message = f"""<b>{escape(lot_obj.name)}</b>\n
-<b><i>Текст выдачи:</i></b> <code>{escape(lot_obj["response"])}</code>\n
-<b><i>Кол-во товаров: </i></b> {products_amount}\n
-<b><i>Файл с товарами: </i></b>{file_path}\n
+        products_amount = f"<code>{Utils.cardinal_tools.count_products(gf_path)}</code>"
+
+    return f"""<b>{escape(lot_obj.name)}</b>
+<b><i>ID товара:</i></b> <code>{escape(lot_id)}</code>
+<b><i>Текст выдачи:</i></b> <code>{escape(lot_obj.get('response', ''))}</code>
+<b><i>Кол-во товаров: </i></b> {products_amount}
+<b><i>Файл с товарами: </i></b>{file_path}
 <i>Обновлено:</i>  <code>{datetime.datetime.now().strftime('%H:%M:%S')}</code>"""
-    return message
 
 
 def send_document_named(bot, chat_id: int | str, file_data: bytes | BinaryIO | str,
