@@ -38,6 +38,7 @@ gs_autoresponse = "{} Autoresponse"
 gs_autodelivery = "{} Auto-delivery"
 gs_nultidelivery = "{} Multi-delivery"
 gs_autorestore = "{} Reactivate lots"
+gs_autorestore_excl = "🚫 Auto-restore exclusions"
 gs_autodisable = "{} Deactivate lots"
 gs_autocomplete = "{} Auto-complete deals"
 gs_autowithdrawal = "{} Auto-withdrawal"
@@ -80,7 +81,19 @@ ad_to_mm = "📋 Back to main menu"
 
 # - Edit auto-delivery
 ea_edit_delivery_text = "✏️ Edit delivery text"
-ea_link_goods_file = "⛓️ Link goods file"
+ea_link_goods_file = "⛓️ Goods file"
+ad_section_regular = "📄 Regular delivery"
+ad_section_limited = "🔑 Limited delivery"
+ad_my_lots = "📋 My lots"
+ad_bind_lot = "➕ Bind lot"
+ad_to_section = "◀️ Back to section"
+ad_to_limited = "🔑 To limited"
+ad_mode_regular = "regular"
+ad_mode_limited = "limited"
+ad_lot_hint_regular = "Every buyer gets the same text."
+ad_lot_hint_limited = "One file line = one order. Delivery text must include <code>$product</code>."
+ad_lot_linked_limited = "✅ Lot <code>{}</code> linked.\n\nNow bind a <b>goods file</b> and add keys to it."
+
 ea_delivery = "{} Auto-delivery"
 ea_multidelivery = "{} Multi-delivery"
 ea_restore = "{} Reactivation"
@@ -139,10 +152,10 @@ ord_mark_sent = "✅ Complete order"
 
 # Appearance of new msg. notification
 mv_incl_my_msg = "{} Show my messages"
-mv_incl_fp_msg = "{} Show Playerok messages"
+mv_incl_pk_msg = "{} Show Playerok messages"
 mv_incl_bot_msg = "{} Show bot messages"
 mv_only_my_msg = "{} Notify, if only my messages"
-mv_only_fp_msg = "{} Notify, if only Playerok messages"
+mv_only_pk_msg = "{} Notify, if only Playerok messages"
 mv_only_bot_msg = "{} Notify, if only bot messages"
 mv_show_image_name = "{} Show image names"
 
@@ -337,7 +350,7 @@ power_off_6 = "Okay, okay, I'm off..."
 power_off_cancelled = "The shutdown has been cancelled."
 power_off_error = "❌ This button does not belong to this session.\nCall this menu again."
 
-enter_msg_text = "Enter message text."
+enter_msg_text = "Enter message text or send a photo."
 msg_sent = "✅ Message sent to <a href=\"https://playerok.com/chats/{}\">{}</a> chat."
 msg_sent_short = "✅ Message sent."
 msg_sending_error = "❌ Failed to send a message to <a href=\"https://playerok.com/chats/{}\">{}</a> chat."
@@ -456,6 +469,32 @@ adv_description = """🐦 Playerok Cardinal v{}🐦
 desc_main = "Select a settings category."
 desc_lang = desc_main
 desc_gs = "Here you can turn the basic <i>POC</i> functions on and off."
+desc_ar_excl = (
+    "🚫 <b>Auto-restore exclusions</b>\n\n"
+    "These lots and categories will <b>not</b> be relisted after a sale.\n\n"
+    "• <b>Lot</b> — item UUID\n"
+    "• <b>Category</b> — slug or ID (e.g. <code>stars</code>)"
+)
+ar_excl_lots = "📦 Excluded lots ({})"
+ar_excl_cats = "📂 Excluded categories ({})"
+ar_excl_lots_title = "📦 Lots without auto-restore"
+ar_excl_cats_title = "📂 Categories without auto-restore"
+ar_excl_add_lot = "➕ Add lot (ID)"
+ar_excl_add_cat = "➕ Add category"
+ar_excl_pick_lot = "📋 Pick from my lots"
+ar_excl_add_stars = "⭐ Exclude Stars category"
+ar_excl_enter_lot = "Send the <b>lot ID</b> (UUID from playerok.com)."
+ar_excl_enter_cat = "Send category <b>slug</b> or <b>ID</b>.\nExamples: <code>stars</code>"
+ar_excl_lot_added = "✅ Lot <code>{}</code> added to exclusions."
+ar_excl_lot_exists = "ℹ️ Lot <code>{}</code> is already excluded."
+ar_excl_lot_removed = "✅ Lot removed from exclusions."
+ar_excl_cat_added = "✅ Category <code>{}</code> added to exclusions."
+ar_excl_cat_exists = "ℹ️ Category <code>{}</code> is already excluded."
+ar_excl_cat_removed = "✅ Category removed from exclusions."
+ar_excl_empty_lots = "Empty — all lots are restored (if enabled globally)."
+ar_excl_empty_cats = "Empty — no category filters."
+ar_excl_pick_title = "Pick a lot to exclude from auto-restore."
+
 desc_ns = """Here you can configure notifications.\n
 <b><u>Settings are separate for each <i>Telegram</i> chat!</u></b>\n
 Current chat ID: <code>{}</code>"""
@@ -463,12 +502,44 @@ desc_bl = "Here you can set restrictions for blacklisted users."
 desc_ar = "Here you can add commands or edit existing ones."
 desc_ar_list = "Chose a command / commands set you are interested in."
 
-desc_ad = "Here you can change auto-delivery settings, upload/download goods files, etc."
-desc_ad_list = "This is a list of lots that have auto-delivery linked to them. Select the lot you are interested in."
-desc_ad_fp_lot_list = "This is a list of lots from your Playerok profile. Select the lot you're interested in to link auto-delivery to it.\n" \
-                      "If a lot is missing from the list, click the  <code>🔄 Refresh</code> button.\n\n" \
-                      "Last scanning: {}"
-desc_gf = "Choose a goods file you are interested in."
+desc_ad = """<b>Auto-delivery</b>
+
+Choose a section:
+
+📄 <b>Regular</b> — same text for every buyer.
+
+🔑 <b>Limited</b> — keys/codes from a file, one per order."""
+desc_ad_regular = """<b>Regular delivery</b>
+
+After payment the buyer gets the same text (unlimited).
+
+1. Bind a lot
+2. Set delivery text
+3. Enable auto-delivery in global switches"""
+desc_ad_limited = """<b>Limited delivery</b>
+
+Best for keys, codes, links.
+
+After payment the buyer gets the <b>next line</b> from the goods file.
+
+1. Create/upload a goods file
+2. Bind a lot
+3. Bind the file to the lot
+4. Put <code>$product</code> in the delivery text
+5. Enable auto-delivery
+
+Example:
+<code>FD3Jf3L
+JJDO2J2</code>
+order 1 → FD3Jf3L
+order 2 → JJDO2J2"""
+desc_ad_list_regular = "Lots with <b>regular</b> delivery. Choose a lot."
+desc_ad_list_limited = "Lots with <b>limited</b> delivery. Choose a lot."
+desc_ad_list = desc_ad_list_regular
+desc_ad_pk_lot_list = "Lots from your Playerok profile. Choose a lot to bind.\n" \
+                      "If missing — press <code>🔄 Refresh</code>.\n\n" \
+                      "Scan: {}"
+desc_gf = "Goods files for limited delivery.\nOne line = one order."
 
 desc_mv = "Here you can configure the appearance of new message notifications."
 desc_gr = "Here you can configure the welcome message for new users.\n\n<b>Greeting text:</b>\n<code>{}</code>"

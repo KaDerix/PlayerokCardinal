@@ -111,6 +111,7 @@ def main_settings(c: Cardinal) -> K:
              B(_("gs_autodelivery", l('autoDelivery')), None, f"{p}:autoDelivery")) \
         .row(B(_("gs_nultidelivery", l('multiDelivery')), None, f"{p}:multiDelivery"),
              B(_("gs_autorestore", l('autoRestore')), None, f"{p}:autoRestore")) \
+        .add(B(_("gs_autorestore_excl"), None, CBT.AR_EXCL)) \
         .row(B(_("gs_autodisable", l('autoDisable')), None, f"{p}:autoDisable"),
              B(_("gs_autocomplete", l('autoCompleteDeals')), None, f"{p}:autoCompleteDeals")) \
         .row(B(_("gs_autowithdrawal", l('autoWithdrawal')), None, f"{p}:autoWithdrawal")) \
@@ -141,10 +142,10 @@ def new_message_view_settings(c: Cardinal) -> K:
 
     kb = K() \
         .add(B(_("mv_incl_my_msg", l("includeMyMessages")), None, f"{p}:includeMyMessages")) \
-        .add(B(_("mv_incl_fp_msg", l("includeFPMessages")), None, f"{p}:includeFPMessages")) \
+        .add(B(_("mv_incl_pk_msg", l("includePlayerokMessages")), None, f"{p}:includePlayerokMessages")) \
         .add(B(_("mv_incl_bot_msg", l("includeBotMessages")), None, f"{p}:includeBotMessages")) \
         .add(B(_("mv_only_my_msg", l("notifyOnlyMyMessages")), None, f"{p}:notifyOnlyMyMessages")) \
-        .add(B(_("mv_only_fp_msg", l("notifyOnlyFPMessages")), None, f"{p}:notifyOnlyFPMessages")) \
+        .add(B(_("mv_only_pk_msg", l("notifyOnlyPlayerokMessages")), None, f"{p}:notifyOnlyPlayerokMessages")) \
         .add(B(_("mv_only_bot_msg", l("notifyOnlyBotMessages")), None, f"{p}:notifyOnlyBotMessages")) \
         .add(B(_("mv_show_image_name", l("showImageName")), None, f"{p}:showImageName")) \
         .add(B(_("gl_back"), None, CBT.MAIN2))
@@ -425,13 +426,6 @@ def edit_command(c: Cardinal, command_index: int, offset: int) -> K:
 
 
 def products_files_list(offset: int) -> K:
-    """
-    Генерирует клавиатуру со списком товарных файлов (CBT.PRODUCTS_FILES_LIST:<offset>).
-
-    :param offset: смещение списка товарных файлов.
-
-    :return: объект клавиатуры со списком товарных файлов.
-    """
     keyboard = K()
     files = os.listdir("storage/products")[offset:offset + MENU_CFG.PF_BTNS_AMOUNT]
     if not files and offset != 0:
@@ -445,22 +439,13 @@ def products_files_list(offset: int) -> K:
     keyboard = add_navigation_buttons(keyboard, offset, MENU_CFG.PF_BTNS_AMOUNT, len(files),
                                       len(os.listdir("storage/products")), CBT.PRODUCTS_FILES_LIST)
 
-    keyboard.add(B(_("ad_to_ad"), None, f"{CBT.CATEGORY}:ad")) \
-        .add(B(_("ad_to_mm"), None, CBT.MAIN))
+    keyboard.add(B(_("ad_to_limited"), None, "ad_menu:limited")) \
+        .add(B(_("ad_to_ad"), None, f"{CBT.CATEGORY}:ad"))
     return keyboard
 
 
 def products_file_edit(file_number: int, offset: int, confirmation: bool = False) \
         -> K:
-    """
-    Генерирует клавиатуру изменения товарного файла (CBT.EDIT_PRODUCTS_FILE:<file_index>:<offset>).
-
-    :param file_number: номер файла.
-    :param offset: смещение списка товарных файлов.
-    :param confirmation: включить ли в клавиатуру подтверждение удаления файла.
-
-    :return: объект клавиатуры изменения товарного файла.
-    """
     keyboard = K() \
         .add(B(_("gf_add_goods"), None, f"{CBT.ADD_PRODUCTS_TO_FILE}:{file_number}:{file_number}:{offset}:0")) \
         .add(B(_("gf_download"), None, f"download_products_file:{file_number}:{offset}"))
@@ -474,104 +459,95 @@ def products_file_edit(file_number: int, offset: int, confirmation: bool = False
     return keyboard
 
 
-def lots_list(cardinal: Cardinal, offset: int) -> K:
-    """
-    Создает клавиатуру со списком лотов с автовыдачей. (lots:<offset>).
-
-    :param cardinal: объект кардинала.
-    :param offset: смещение списка лотов.
-
-    :return: объект клавиатуры со списком лотов с автовыдачей.
-    """
+def lots_list(cardinal: Cardinal, offset: int, mode: str = "regular") -> K:
+    if mode not in ("regular", "limited"):
+        mode = "regular"
     keyboard = K()
-    sections = adc.section_names(cardinal.RAW_AD_CFG)
-    lots = sections[offset: offset + MENU_CFG.AD_BTNS_AMOUNT]
-    if not lots and offset != 0:
+    entries = adc.section_entries(cardinal.RAW_AD_CFG, mode)
+    page = entries[offset: offset + MENU_CFG.AD_BTNS_AMOUNT]
+    if not page and offset != 0:
         offset = 0
-        lots = sections[offset: offset + MENU_CFG.AD_BTNS_AMOUNT]
+        page = entries[offset: offset + MENU_CFG.AD_BTNS_AMOUNT]
 
-    for index, lot in enumerate(lots):
-        keyboard.add(B(lot, None, f"{CBT.EDIT_AD_LOT}:{offset + index}:{offset}"))
+    for global_idx, lot in page:
+        keyboard.add(B(lot, None, f"{CBT.EDIT_AD_LOT}:{global_idx}:{offset}:{mode}"))
 
-    keyboard = add_navigation_buttons(keyboard, offset, MENU_CFG.AD_BTNS_AMOUNT, len(lots),
-                                      len(sections), CBT.AD_LOTS_LIST)
+    keyboard = add_navigation_buttons(
+        keyboard, offset, MENU_CFG.AD_BTNS_AMOUNT, len(page),
+        len(entries), CBT.AD_LOTS_LIST, extra=[mode],
+    )
 
-    keyboard.add(B(_("ad_to_ad"), None, f"{CBT.CATEGORY}:ad")) \
-        .add(B(_("ad_to_mm"), None, CBT.MAIN))
+    keyboard.add(B(_("ad_to_section"), None, f"ad_menu:{mode}")) \
+        .add(B(_("ad_to_ad"), None, f"{CBT.CATEGORY}:ad"))
     return keyboard
 
 
-def funpay_lots_list(c: Cardinal, offset: int):
-    """
-    Генерирует клавиатуру со списком лотов текущего профиля (funpay_lots:<offset>).
-
-    :param c: объект кардинала.
-    :param offset: смещение списка слотов.
-
-    :return: объект клавиатуры со списком лотов текущего профиля.
-    """
+def playerok_lots_list(c: Cardinal, offset: int, mode: str = "regular"):
+    if mode not in ("regular", "limited"):
+        mode = "regular"
     keyboard = K()
     all_lots = c.tg_profile.get_common_lots() if c.tg_profile else []
-    lots = all_lots[offset: offset + MENU_CFG.FP_LOTS_BTNS_AMOUNT]
+    lots = all_lots[offset: offset + MENU_CFG.PK_LOTS_BTNS_AMOUNT]
     if not lots and offset != 0:
         offset = 0
-        lots = all_lots[offset: offset + MENU_CFG.FP_LOTS_BTNS_AMOUNT]
+        lots = all_lots[offset: offset + MENU_CFG.PK_LOTS_BTNS_AMOUNT]
 
     for index, lot in enumerate(lots):
-        keyboard.add(B(lot.description, None, f"{CBT.ADD_AD_TO_LOT}:{offset + index}:{offset}"))
+        keyboard.add(B(lot.description, None, f"{CBT.ADD_AD_TO_LOT}:{offset + index}:{offset}:{mode}"))
 
-    keyboard = add_navigation_buttons(keyboard, offset, MENU_CFG.FP_LOTS_BTNS_AMOUNT, len(lots),
-                                      len(all_lots), CBT.FP_LOTS_LIST)
+    keyboard = add_navigation_buttons(
+        keyboard, offset, MENU_CFG.PK_LOTS_BTNS_AMOUNT, len(lots),
+        len(all_lots), CBT.PK_LOTS_LIST, extra=[mode],
+    )
 
-    keyboard.row(B(_("fl_manual"), None, f"{CBT.ADD_AD_TO_LOT_MANUALLY}:{offset}"),
-                 B(_("gl_refresh"), None, f"update_funpay_lots:{offset}")) \
-        .add(B(_("ad_to_ad"), None, f"{CBT.CATEGORY}:ad")) \
-        .add(B(_("ad_to_mm"), None, CBT.MAIN))
+    keyboard.row(B(_("fl_manual"), None, f"{CBT.ADD_AD_TO_LOT_MANUALLY}:{offset}:{mode}"),
+                 B(_("gl_refresh"), None, f"update_playerok_lots:{offset}:{mode}")) \
+        .add(B(_("ad_to_section"), None, f"ad_menu:{mode}")) \
+        .add(B(_("ad_to_ad"), None, f"{CBT.CATEGORY}:ad"))
     return keyboard
 
 
-def edit_lot(c: Cardinal, lot_number: int, offset: int) -> K:
-    """
-    Генерирует клавиатуру изменения лота (CBT.EDIT_AD_LOT:<lot_num>:<offset>).
+def edit_lot(c: Cardinal, lot_number: int, offset: int, mode: str = "regular") -> K:
+    if mode not in ("regular", "limited"):
+        lot = adc.section_names(c.RAW_AD_CFG)[lot_number]
+        mode = "limited" if adc.is_limited_lot(c.RAW_AD_CFG[lot]) else "regular"
 
-    :param c: экземпляр кардинала.
-    :param lot_number: номер лота.
-    :param offset: смещение списка слотов.
-
-    :return: объект клавиатуры изменения лота.
-    """
     lot = adc.section_names(c.RAW_AD_CFG)[lot_number]
     lot_obj = c.RAW_AD_CFG[lot]
     file_name = adc.goods_file_basename(lot_obj)
+    limited = bool(file_name)
     kb = K() \
-        .add(B(_("ea_edit_delivery_text"), None, f"{CBT.EDIT_LOT_DELIVERY_TEXT}:{lot_number}:{offset}"))
-    if not file_name:
-        kb.add(B(_("ea_link_goods_file"), None, f"{CBT.BIND_PRODUCTS_FILE}:{lot_number}:{offset}"))
-    else:
+        .add(B(_("ea_edit_delivery_text"), None, f"{CBT.EDIT_LOT_DELIVERY_TEXT}:{lot_number}:{offset}:{mode}"))
+
+    if limited:
         if file_name not in os.listdir("storage/products"):
             with open(f"storage/products/{file_name}", "w", encoding="utf-8"):
                 pass
         file_number = os.listdir("storage/products").index(file_name)
-
-        kb.row(B(_("ea_link_goods_file"), None, f"{CBT.BIND_PRODUCTS_FILE}:{lot_number}:{offset}"),
-               B(_("gf_add_goods"), None, f"{CBT.ADD_PRODUCTS_TO_FILE}:{file_number}:{lot_number}:{offset}:1"))
+        kb.row(
+            B(_("ea_link_goods_file"), None, f"{CBT.BIND_PRODUCTS_FILE}:{lot_number}:{offset}:{mode}"),
+            B(_("gf_add_goods"), None, f"{CBT.ADD_PRODUCTS_TO_FILE}:{file_number}:{lot_number}:{offset}:1"),
+        )
+    elif mode == "limited":
+        kb.add(B(_("ea_link_goods_file"), None, f"{CBT.BIND_PRODUCTS_FILE}:{lot_number}:{offset}:{mode}"))
 
     section = c.MAIN_CFG.get("Playerok", {})
+
     def get_bool(key, default="0"):
         if isinstance(section, dict):
             return section.get(key, default) == "1"
-        return section.getboolean(key) if hasattr(section, 'getboolean') else False
-    
+        return section.getboolean(key) if hasattr(section, "getboolean") else False
+
     p = {
         "ad": (get_bool("autoDelivery"), "disable"),
         "md": (get_bool("multiDelivery"), "disableMultiDelivery"),
         "ares": (get_bool("autoRestore"), "disableAutoRestore"),
         "adis": (get_bool("autoDisable"), "disableAutoDisable"),
     }
-    info, sl, dis = f"{lot_number}:{offset}", "switch_lot", CBT.PARAM_DISABLED
+    info, sl, dis = f"{lot_number}:{offset}:{mode}", "switch_lot", CBT.PARAM_DISABLED
 
     def l(s):
-        return '⚪' if not p[s][0] else '🔴' if lot_obj.getboolean(p[s][1]) else '🟢'
+        return "⚪" if not p[s][0] else "🔴" if lot_obj.getboolean(p[s][1]) else "🟢"
 
     kb.row(B(_("ea_delivery", l("ad")), None, f"{f'{sl}:disable:{info}' if p['ad'][0] else dis}"),
            B(_("ea_multidelivery", l("md")), None, f"{f'{sl}:disableMultiDelivery:{info}' if p['md'][0] else dis}")) \
@@ -579,25 +555,15 @@ def edit_lot(c: Cardinal, lot_number: int, offset: int) -> K:
              B(_("ea_deactivate", l("adis")), None, f"{f'{sl}:disableAutoDisable:{info}' if p['adis'][0] else dis}")) \
         .row(B(_("ea_test"), None, f"test_auto_delivery:{info}"),
              B(_("gl_delete"), None, f"{CBT.DEL_AD_LOT}:{info}")) \
-        .row(B(_("gl_back"), None, f"{CBT.AD_LOTS_LIST}:{offset}"),
+        .row(B(_("gl_back"), None, f"{CBT.AD_LOTS_LIST}:{offset}:{mode}"),
              B(_("gl_refresh"), None, f"{CBT.EDIT_AD_LOT}:{info}"))
     return kb
 
 
 # Прочее
 def new_order(order_id: str, username: str, node_id: str | int,
-              confirmation: bool = False, no_refund: bool = False) -> K:
-    """
-    Генерирует клавиатуру для сообщения о новом заказе.
-
-    :param order_id: ID заказа (без #).
-    :param username: никнейм покупателя.
-    :param node_id: ID чата с покупателем (UUID строка в PlayerokAPI).
-    :param confirmation: заменить ли кнопку "Вернуть деньги" на подтверждение "Да" / "Нет"?
-    :param no_refund: убрать ли кнопки, связанные с возвратом денег?
-
-    :return: объект клавиатуры для сообщения о новом заказе.
-    """
+              confirmation: bool = False, no_refund: bool = False,
+              deal_status=None, show_mark_sent: bool | None = None) -> K:
     deal_id = str(order_id)
     chat_id = str(node_id)
     kb = K()
@@ -608,11 +574,20 @@ def new_order(order_id: str, username: str, node_id: str | int,
         else:
             kb.add(B(_("ord_refund"), None, f"{CBT.REQUEST_REFUND}:{deal_id}"))
 
-    kb.add(B(_("ord_open"), url=f"https://playerok.com/deals/{deal_id}/")) \
-        .row(B(_("ord_mark_sent"), None, f"{CBT.MARK_DEAL_SENT}:{deal_id}")) \
-        .row(B(_("ord_answer"), None, f"{CBT.SEND_FP_MESSAGE}:{chat_id}"),
-             B(_("ord_templates"), None,
-               f"{CBT.TMPLT_LIST_ANS_MODE}:0:{deal_id}:2:{1 if no_refund else 0}"))
+    kb.add(B(_("ord_open"), url=f"https://playerok.com/deals/{deal_id}/"))
+
+    if show_mark_sent is None:
+        st = deal_status
+        if st is not None and hasattr(st, "name"):
+            st = st.name
+        st = str(st or "").upper()
+        show_mark_sent = st not in ("SENT", "CONFIRMED")
+    if show_mark_sent:
+        kb.row(B(_("ord_mark_sent"), None, f"{CBT.MARK_DEAL_SENT}:{deal_id}"))
+
+    kb.row(B(_("ord_answer"), None, f"{CBT.SEND_PK_MESSAGE}:{chat_id}"),
+           B(_("ord_templates"), None,
+             f"{CBT.TMPLT_LIST_ANS_MODE}:0:{deal_id}:2:{1 if no_refund else 0}"))
     return kb
 
 
@@ -631,7 +606,7 @@ def reply(node_id: str | int, username: str, again: bool = False, extend: bool =
     node_id_str = str(node_id)
     # Убираем username из callback_data для TMPLT_LIST_ANS_MODE, чтобы не превысить лимит 64 байта
     # username можно получить из чата по node_id
-    bts = [B(_("msg_reply2") if again else _("msg_reply"), None, f"{CBT.SEND_FP_MESSAGE}:{node_id_str}"),
+    bts = [B(_("msg_reply2") if again else _("msg_reply"), None, f"{CBT.SEND_PK_MESSAGE}:{node_id_str}"),
            B(_("msg_templates"), None, f"{CBT.TMPLT_LIST_ANS_MODE}:0:{node_id_str}:{int(again)}:{int(extend)}")]
     if extend:
         bts.append(B(_("msg_more"), None, f"{CBT.EXTEND_CHAT}:{node_id_str}"))

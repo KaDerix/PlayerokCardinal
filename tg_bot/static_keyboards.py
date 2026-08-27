@@ -48,12 +48,26 @@ def AR_SETTINGS() -> K:
 
 def AD_SETTINGS() -> K:
     return K() \
-        .add(B(_("ad_edit_autodelivery"), callback_data=f"{CBT.AD_LOTS_LIST}:0")) \
-        .add(B(_("ad_add_autodelivery"), callback_data=f"{CBT.FP_LOTS_LIST}:0")) \
-        .add(B(_("ad_edit_goods_file"), callback_data=f"{CBT.PRODUCTS_FILES_LIST}:0")) \
-        .row(B(_("ad_upload_goods_file"), callback_data=CBT.UPLOAD_PRODUCTS_FILE),
-             B(_("ad_create_goods_file"), callback_data=CBT.CREATE_PRODUCTS_FILE)) \
+        .add(B(_("ad_section_regular"), callback_data="ad_menu:regular")) \
+        .add(B(_("ad_section_limited"), callback_data="ad_menu:limited")) \
         .add(B(_("gl_back"), callback_data=CBT.MAIN))
+
+
+def AD_REGULAR_MENU() -> K:
+    return K() \
+        .add(B(_("ad_my_lots"), callback_data=f"{CBT.AD_LOTS_LIST}:0:regular")) \
+        .add(B(_("ad_bind_lot"), callback_data=f"{CBT.PK_LOTS_LIST}:0:regular")) \
+        .add(B(_("gl_back"), callback_data=f"{CBT.CATEGORY}:ad"))
+
+
+def AD_LIMITED_MENU() -> K:
+    return K() \
+        .add(B(_("ad_my_lots"), callback_data=f"{CBT.AD_LOTS_LIST}:0:limited")) \
+        .add(B(_("ad_bind_lot"), callback_data=f"{CBT.PK_LOTS_LIST}:0:limited")) \
+        .add(B(_("ad_edit_goods_file"), callback_data=f"{CBT.PRODUCTS_FILES_LIST}:0")) \
+        .row(B(_("ad_create_goods_file"), callback_data=CBT.CREATE_PRODUCTS_FILE),
+             B(_("ad_upload_goods_file"), callback_data=CBT.UPLOAD_PRODUCTS_FILE)) \
+        .add(B(_("gl_back"), callback_data=f"{CBT.CATEGORY}:ad"))
 
 
 def CONFIGS_UPLOADER() -> K:

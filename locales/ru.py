@@ -38,6 +38,7 @@ gs_autoresponse = "{} Автоответчик"
 gs_autodelivery = "{} Авто-выдача"
 gs_nultidelivery = "{} Мульти-выдача"
 gs_autorestore = "{} Авто-восстановление"
+gs_autorestore_excl = "🚫 Исключения авто-восстановления"
 gs_autodisable = "{} Деактивация лотов"
 gs_autocomplete = "{} Авто-подтверждение сделок"
 gs_autowithdrawal = "{} Авто-вывод"
@@ -69,25 +70,33 @@ ar_add_more = "➕ Добавить еще"
 ar_add_another = "➕ Добавить другую"
 
 # Настройки авто-выдачи
-ad_edit_autodelivery = "🗳️ Редактировать авто-выдачу лотов"
-ad_add_autodelivery = "➕ Привязать авто-выдачу к лоту"
+ad_section_regular = "📄 Обычная выдача"
+ad_section_limited = "🔑 Лимитированная выдача"
+ad_my_lots = "📋 Мои лоты"
+ad_bind_lot = "➕ Привязать лот"
+ad_edit_goods_file = "📁 Файлы товаров"
+ad_upload_goods_file = "⤴️ Загрузить файл"
+ad_create_goods_file = "➕ Создать файл"
+ad_to_ad = "📦 К авто-выдаче"
+ad_to_section = "◀️ К разделу"
+ad_to_limited = "🔑 К лимитированной"
+ad_to_mm = "📋 В главное меню"
 ad_add_another_ad = "➕ Привязать другую"
 ad_add_more_ad = "➕ Привязать еще"
-ad_edit_goods_file = "📋 Редактировать файлы товаров"
-ad_upload_goods_file = "⤴️ Загрузить файл товаров"
-ad_create_goods_file = "➕ Создать файл товаров"
-ad_to_ad = "📦 Назад к настройкам авто-выдачи"
-ad_to_mm = "📋 Назад в главное меню"
+ad_mode_regular = "обычная"
+ad_mode_limited = "лимитированная"
+ad_lot_hint_regular = "Каждому покупателю уходит один и тот же текст."
+ad_lot_hint_limited = "Каждая строка файла = 1 заказ. В тексте нужен <code>$product</code>."
 
 # - Редактирование авто-выдачи
-ea_edit_delivery_text = "✏️ Редактировать текст выдачи"
-ea_link_goods_file = "⛓️ Привязать файл товаров"
+ea_edit_delivery_text = "✏️ Текст выдачи"
+ea_link_goods_file = "⛓️ Файл товаров"
 ea_delivery = "{} Авто-выдача"
 ea_multidelivery = "{} Мульти-выдача"
 ea_restore = "{} Восстановление"
 ea_deactivate = "{} Деактивация"
-ea_test = "🗝️ Ключ авто-выдачи"
-ea_more_test = "🗝️ Еще 1 ключ"
+ea_test = "🗝️ Тест"
+ea_more_test = "🗝️ Еще тест"
 ea_link_another_gf = "⛓️ Другой файл"
 
 # - Добавление авто-выдачи
@@ -142,10 +151,10 @@ ord_mark_sent = "✅ Выполнить заказ"
 
 # Настройки вида уведомлений о новых сообщениях
 mv_incl_my_msg = "{} Отображать мои сообщения"
-mv_incl_fp_msg = "{} Отображать сообщения Playerok"
+mv_incl_pk_msg = "{} Отображать сообщения Playerok"
 mv_incl_bot_msg = "{} Отображать сообщения бота"
 mv_only_my_msg = "{} Увед., если сообщ. только от меня"
-mv_only_fp_msg = "{} Увед., если сообщ. только от Playerok"
+mv_only_pk_msg = "{} Увед., если сообщ. только от Playerok"
 mv_only_bot_msg = "{} Увед., если сообщ. только от бота"
 mv_show_image_name = "{} Отображать названия изображений"
 
@@ -340,7 +349,7 @@ power_off_6 = "Хорошо, хорошо, я выключаюсь..."
 power_off_cancelled = "Выключение отменено."
 power_off_error = "❌ Эта кнопка не принадлежит этой сессии.\nВызовите это меню снова."
 
-enter_msg_text = "Введите текст сообщения."
+enter_msg_text = "Введите текст сообщения или отправьте фото."
 msg_sent = "✅ Сообщение отправлено в чат <a href=\"https://playerok.com/chats/{}\">{}</a>."
 msg_sent_short = "✅ Сообщение отправлено."
 msg_sending_error = "❌ Не удалось отправить сообщение в чат <a href=\"https://playerok.com/chats/{}\">{}</a>."
@@ -459,6 +468,36 @@ adv_description = """🐦 Playerok Cardinal v{}🐦
 desc_main = "Выберите категорию настроек."
 desc_lang = desc_main
 desc_gs = "Здесь вы можете включить и выключить основные функции <i>POC</i>."
+desc_ar_excl = (
+    "🚫 <b>Исключения авто-восстановления</b>\n\n"
+    "Для этих лотов и категорий бот <b>не</b> будет перевыставлять товар после продажи.\n\n"
+    "• <b>Лот</b> — конкретный ID товара\n"
+    "• <b>Категория</b> — slug или ID (например <code>stars</code>)\n\n"
+    "Также можно выключить восстановление у лота в настройках авто-выдачи."
+)
+ar_excl_lots = "📦 Исключённые лоты ({})"
+ar_excl_cats = "📂 Исключённые категории ({})"
+ar_excl_lots_title = "📦 Лоты без авто-восстановления"
+ar_excl_cats_title = "📂 Категории без авто-восстановления"
+ar_excl_add_lot = "➕ Добавить лот (ID)"
+ar_excl_add_cat = "➕ Добавить категорию"
+ar_excl_pick_lot = "📋 Выбрать из моих лотов"
+ar_excl_add_stars = "⭐ Добавить категорию Stars"
+ar_excl_enter_lot = "Введите <b>ID лота</b> (UUID с playerok.com)."
+ar_excl_enter_cat = (
+    "Введите <b>slug</b> или <b>ID категории</b>.\n"
+    "Примеры: <code>stars</code>, UUID категории."
+)
+ar_excl_lot_added = "✅ Лот <code>{}</code> добавлен в исключения."
+ar_excl_lot_exists = "ℹ️ Лот <code>{}</code> уже в исключениях."
+ar_excl_lot_removed = "✅ Лот убран из исключений."
+ar_excl_cat_added = "✅ Категория <code>{}</code> добавлена в исключения."
+ar_excl_cat_exists = "ℹ️ Категория <code>{}</code> уже в исключениях."
+ar_excl_cat_removed = "✅ Категория убрана из исключений."
+ar_excl_empty_lots = "Список пуст — все лоты восстанавливаются (если включено глобально)."
+ar_excl_empty_cats = "Список пуст — ограничения по категориям нет."
+ar_excl_pick_title = "Выберите лот — он будет добавлен в исключения авто-восстановления."
+
 desc_ns = """Здесь вы можете настроить уведомления.\n
 <b><u>Настройки отдельны для каждого <i>Telegram</i> чата!</u></b>\n
 Текущий Chat ID: <code>{}</code>"""
@@ -466,12 +505,46 @@ desc_bl = "Здесь вы можете установить ограничен�
 desc_ar = "Здесь вы можете добавить команды или отредактировать существующие."
 desc_ar_list = "Выберите команду / набор команд, которые вас интересуют."
 
-desc_ad = "Здесь вы можете изменить настройки авто-выдачи, загрузить/скачать файлы товаров и т.д."
-desc_ad_list = "Это список лотов, к которым привязана авто-выдача. Выберите интересующий вас лот."
-desc_ad_fp_lot_list = "Это список лотов из вашего профиля Playerok. Выберите интересующий вас лот, чтобы привязать к нему авто-выдачу.\n" \
-                      "Если лот отсутствует в списке, нажмите кнопку  <code>🔄 Обновить</code>.\n\n" \
-                      "Последнее сканирование: {}"
-desc_gf = "Выберите интересующий вас файл товаров."
+desc_ad = """<b>Авто-выдача</b>
+
+Выберите раздел:
+
+📄 <b>Обычная</b> — один и тот же текст каждому покупателю.
+
+🔑 <b>Лимитированная</b> — ключи/коды из файла, по одному на заказ."""
+desc_ad_regular = """<b>Обычная выдача</b>
+
+После оплаты покупатель получает один и тот же текст (бесконечно).
+
+1. Привяжите лот
+2. Напишите текст выдачи
+3. Включите авто-выдачу в глобальных переключателях"""
+desc_ad_limited = """<b>Лимитированная выдача</b>
+
+Подходит в основном для ключей, кодов, ссылок.
+
+После оплаты уходит <b>следующая строка</b> из файла товаров.
+
+1. Создайте/загрузите файл товаров
+2. Привяжите лот
+3. Привяжите файл к лоту
+4. В тексте выдачи укажите <code>$product</code>
+5. Включите авто-выдачу в глобальных переключателях
+
+Пример файла:
+<code>FD3Jf3L
+JJDO2J2</code>
+
+заказ 1 → <code>FD3Jf3L</code>
+заказ 2 → <code>JJDO2J2</code>"""
+desc_ad_list_regular = "Лоты с <b>обычной</b> выдачей. Выберите лот."
+desc_ad_list_limited = "Лоты с <b>лимитированной</b> выдачей. Выберите лот."
+desc_ad_list = desc_ad_list_regular
+desc_ad_pk_lot_list = "Лоты из профиля Playerok. Выберите лот для привязки.\n" \
+                      "Если лота нет — нажмите <code>🔄 Обновить</code>.\n\n" \
+                      "Сканирование: {}"
+desc_gf = "Файлы товаров для лимитированной выдачи.\nОдна строка файла = один заказ."
+ad_lot_linked_limited = "✅ Лот <code>{}</code> привязан.\n\nТеперь привяжите <b>файл товаров</b> и добавьте в него ключи."
 
 desc_mv = "Здесь вы можете настроить вид уведомлений о новых сообщениях."
 desc_gr = "Здесь можно настроить сообщение покупателю при новом заказе.\n\n<b>Текст:</b>\n<code>{}</code>"
@@ -568,37 +641,37 @@ log_tg_notification_error = "Произошла ошибка при отправ
 log_access_attempt = "$YELLOW✦$RESET Неверный пароль   $CYAN@{} $RESET· ID $YELLOW{}"
 log_click_attempt = "$YELLOW✦$RESET Нажатие без доступа  $CYAN@{} $RESET(ID {}) · чат $MAGENTA@{} $RESET({})"
 log_access_granted = "$GREEN✦$RESET Вход в панель      $CYAN@{} $RESET· ID $YELLOW{}"
-log_new_ad_key = "$CYAN✦$RESET Ключ выдачи        $YELLOW{} $RESET→ $CYAN{} $RESET· от $MAGENTA@{}"
-log_user_blacklisted = "$YELLOW✦$RESET В ЧС              $YELLOW{} $RESET· от $MAGENTA@{}"
-log_user_unbanned = "$GREEN✦$RESET Из ЧС             $YELLOW{} $RESET· от $MAGENTA@{}"
-log_watermark_changed = "$CYAN✦$RESET Водяной знак       $YELLOW{} $RESET· $MAGENTA@{}"
-log_watermark_deleted = "$CYAN✦$RESET Водяной знак удалён · $MAGENTA@{}"
-log_greeting_changed = "$CYAN✦$RESET Приветствие обновлено · $MAGENTA@{}"
-log_greeting_cooldown_changed = "$CYAN✦$RESET Кулдаун приветствия $YELLOW{} дн. $RESET· $MAGENTA@{}"
-log_order_confirm_changed = "$CYAN✦$RESET Ответ на подтверждение · $MAGENTA@{}"
-log_review_reply_changed = "$CYAN✦$RESET Ответ на {}★ · $MAGENTA@{}"
-log_param_changed = "$CYAN✦$RESET $YELLOW[{}]$RESET.$CYAN{} $RESET→ $GREEN{} $RESET· $MAGENTA@{}"
-log_notification_switched = "$CYAN✦$RESET Уведомления $YELLOW{} $RESET· чат $YELLOW{} $RESET→ $GREEN{} $RESET· $MAGENTA@{}"
-log_ad_linked = "$CYAN✦$RESET Автовыдача → $YELLOW{} $RESET· $MAGENTA@{}"
-log_ad_text_changed = "$CYAN✦$RESET Текст выдачи $YELLOW{} $RESET· $MAGENTA@{}"
-log_ad_deleted = "$YELLOW✦$RESET Автовыдача удалена $YELLOW{} $RESET· $MAGENTA@{}"
-log_gf_created = "$CYAN✦$RESET Файл товаров $YELLOW{} $RESET· $MAGENTA@{}"
-log_gf_unlinked = "$CYAN✦$RESET Файл отвязан от $YELLOW{} $RESET· $MAGENTA@{}"
-log_gf_linked = "$CYAN✦$RESET Файл $YELLOW{} $RESET→ $YELLOW{} $RESET· $MAGENTA@{}"
-log_gf_created_and_linked = "$CYAN✦$RESET Файл создан $YELLOW{} $RESET· $MAGENTA@{}"
-log_gf_new_goods = "$CYAN✦$RESET +{} в $YELLOW{} $RESET· $MAGENTA@{}"
-log_gf_downloaded = "$CYAN✦$RESET Скачан $YELLOW{} $RESET· $MAGENTA@{}"
-log_gf_deleted = "$YELLOW✦$RESET Удалён $YELLOW{} $RESET· $MAGENTA@{}"
-log_ar_added = "$CYAN✦$RESET Команда $YELLOW{} $RESET· $MAGENTA@{}"
-log_ar_response_text_changed = "$CYAN✦$RESET Ответ $YELLOW{} $RESET· $MAGENTA@{}"
-log_ar_notification_text_changed = "$CYAN✦$RESET Уведомление $YELLOW{} $RESET· $MAGENTA@{}"
-log_ar_cmd_deleted = "$YELLOW✦$RESET Команда удалена $YELLOW{} $RESET· $MAGENTA@{}"
-log_cfg_downloaded = "$CYAN✦$RESET Конфиг $YELLOW{} $RESET· $MAGENTA@{}"
-log_tmplt_added = "$CYAN✦$RESET Шаблон добавлен · $MAGENTA@{}"
-log_tmplt_deleted = "$YELLOW✦$RESET Шаблон удалён · $MAGENTA@{}"
-log_pl_activated = "$GREEN✦$RESET Плагин $YELLOW{} $RESET· $MAGENTA@{}"
-log_pl_deactivated = "$YELLOW✦$RESET Плагин выкл. $YELLOW{} $RESET· $MAGENTA@{}"
-log_pl_deleted = "$YELLOW✦$RESET Плагин удалён $YELLOW{} $RESET· $MAGENTA@{}"
+log_new_ad_key = "$CYAN✦$RESET Ключ выдачи · $MAGENTA@{} $RESET(ID {}) · лот $YELLOW{} $RESET→ $CYAN{}"
+log_user_blacklisted = "$YELLOW✦$RESET В ЧС · $MAGENTA@{} $RESET(ID {}) добавил $YELLOW{}"
+log_user_unbanned = "$GREEN✦$RESET Из ЧС · $MAGENTA@{} $RESET(ID {}) убрал $YELLOW{}"
+log_watermark_changed = "$CYAN✦$RESET Водяной знак · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_watermark_deleted = "$CYAN✦$RESET Водяной знак удалён · $MAGENTA@{} $RESET(ID {})"
+log_greeting_changed = "$CYAN✦$RESET Приветствие · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_greeting_cooldown_changed = "$CYAN✦$RESET Кулдаун приветствия · $MAGENTA@{} $RESET(ID {}) → $YELLOW{} дн."
+log_order_confirm_changed = "$CYAN✦$RESET Ответ на подтверждение · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_review_reply_changed = "$CYAN✦$RESET $MAGENTA@{} $RESET(ID {}) · ответ на $YELLOW{}★ $RESET→ $CYAN{}"
+log_param_changed = "$CYAN✦$RESET $MAGENTA@{} $RESET(ID {}) · $CYAN{} $RESETв $YELLOW[{}]$RESET → $GREEN{}"
+log_notification_switched = "$CYAN✦$RESET $MAGENTA@{} $RESET(ID {}) · увед. $YELLOW{} $RESET· чат $YELLOW{} $RESET→ $GREEN{}"
+log_ad_linked = "$CYAN✦$RESET Автовыдача · $MAGENTA@{} $RESET(ID {}) → лот $YELLOW{}"
+log_ad_text_changed = "$CYAN✦$RESET Текст выдачи · $MAGENTA@{} $RESET(ID {}) · лот $YELLOW{} $RESET→ $YELLOW{}"
+log_ad_deleted = "$YELLOW✦$RESET Автовыдача удалена · $MAGENTA@{} $RESET(ID {}) · лот $YELLOW{}"
+log_gf_created = "$CYAN✦$RESET Файл товаров · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_gf_unlinked = "$CYAN✦$RESET Файл отвязан · $MAGENTA@{} $RESET(ID {}) · лот $YELLOW{}"
+log_gf_linked = "$CYAN✦$RESET Файл · $MAGENTA@{} $RESET(ID {}) · $YELLOW{} $RESET→ лот $YELLOW{}"
+log_gf_created_and_linked = "$CYAN✦$RESET Файл создан · $MAGENTA@{} $RESET(ID {}) · $YELLOW{} $RESET→ лот $YELLOW{}"
+log_gf_new_goods = "$CYAN✦$RESET $MAGENTA@{} $RESET(ID {}) · +$GREEN{} $RESETв $YELLOW{}"
+log_gf_downloaded = "$CYAN✦$RESET Скачан файл · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_gf_deleted = "$YELLOW✦$RESET Удалён файл · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_ar_added = "$CYAN✦$RESET Команда · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_ar_response_text_changed = "$CYAN✦$RESET Ответ команды · $MAGENTA@{} $RESET(ID {}) · $YELLOW{} $RESET→ $YELLOW{}"
+log_ar_notification_text_changed = "$CYAN✦$RESET Увед. команды · $MAGENTA@{} $RESET(ID {}) · $YELLOW{} $RESET→ $YELLOW{}"
+log_ar_cmd_deleted = "$YELLOW✦$RESET Команда удалена · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_cfg_downloaded = "$CYAN✦$RESET Конфиг · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_tmplt_added = "$CYAN✦$RESET Шаблон · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_tmplt_deleted = "$YELLOW✦$RESET Шаблон удалён · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_pl_activated = "$GREEN✦$RESET Плагин вкл. · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_pl_deactivated = "$YELLOW✦$RESET Плагин выкл. · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
+log_pl_deleted = "$YELLOW✦$RESET Плагин удалён · $MAGENTA@{} $RESET(ID {}) → $YELLOW{}"
 log_pl_delete_handler_err = "Ошибка удаления плагина $YELLOW{}"
 
 # Логи handlers.py

@@ -64,7 +64,7 @@ def init_templates_cp(cardinal: Cardinal, *args):
         extra = split[4:] if len(split) > 4 else []
         if prev_page == 2:
             try:
-                _, chat_id, username = utils.resolve_deal_context(cardinal, node_or_deal_id)
+                _deal, chat_id, username = utils.resolve_deal_context(cardinal, node_or_deal_id)
             except Exception as e:
                 logger.error(f"Ошибка получения сделки {node_or_deal_id}: {e}")
                 chat_id, username = "", ""

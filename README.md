@@ -112,4 +112,4 @@
 
 ---
 
-**Примечание:** Данный бот написан на базе [FunPay Cardinal](https://github.com/sidor0912/FunPayCardinal). FunPay Cardinal — проект для автоматизации биржи FunPay, который не имеет отношения к данному проекту. Мы выражаем благодарность разработчикам FunPay Cardinal за отличную архитектуру и дизайн.
+**Примечание:** архитектура проекта вдохновлена [FunPay Cardinal](https://github.com/sidor0912/FunPayCardinal). Playerok Cardinal — отдельный бот для playerok.com.

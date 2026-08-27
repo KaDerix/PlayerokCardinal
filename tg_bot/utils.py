@@ -375,26 +375,37 @@ def generate_profile_text(cardinal: Cardinal) -> str:
 
 def generate_lot_info_text(lot_obj: configparser.SectionProxy) -> str:
     from Utils import ad_config as adc
+    from locales.localizer import Localizer
+    _ = Localizer().translate
 
     gf_path = adc.goods_file_path(lot_obj)
     lot_id = lot_obj.get("lot_id", "—")
     if not gf_path:
-        file_path = "<b><u>не привязан.</u></b>"
-        products_amount = "<code>∞</code>"
+        mode = _("ad_mode_regular")
+        file_path = "—"
+        products_amount = "∞"
+        hint = _("ad_lot_hint_regular")
     else:
+        mode = _("ad_mode_limited")
         file_path = f"<code>{escape(gf_path)}</code>"
         if not os.path.exists(gf_path):
             os.makedirs(os.path.dirname(gf_path), exist_ok=True)
             with open(gf_path, "w", encoding="utf-8"):
                 pass
         products_amount = f"<code>{Utils.cardinal_tools.count_products(gf_path)}</code>"
+        hint = _("ad_lot_hint_limited")
 
     return f"""<b>{escape(lot_obj.name)}</b>
-<b><i>ID товара:</i></b> <code>{escape(lot_id)}</code>
-<b><i>Текст выдачи:</i></b> <code>{escape(lot_obj.get('response', ''))}</code>
-<b><i>Кол-во товаров: </i></b> {products_amount}
-<b><i>Файл с товарами: </i></b>{file_path}
-<i>Обновлено:</i>  <code>{datetime.datetime.now().strftime('%H:%M:%S')}</code>"""
+<b><i>ID:</i></b> <code>{escape(lot_id)}</code>
+<b><i>Режим:</i></b> {mode}
+<b><i>Текст выдачи:</i></b>
+<code>{escape(lot_obj.get('response', ''))}</code>
+<b><i>Товаров в файле:</i></b> {products_amount}
+<b><i>Файл:</i></b> {file_path}
+
+{hint}
+
+<i>{datetime.datetime.now().strftime('%H:%M:%S')}</i>"""
 
 
 def send_document_named(bot, chat_id: int | str, file_data: bytes | BinaryIO | str,

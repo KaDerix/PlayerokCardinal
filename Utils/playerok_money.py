@@ -1,4 +1,4 @@
-"""Конвертация сумм Playerok (рубли в API, без деления на 100 как у FunPay)."""
+"""Конвертация сумм Playerok (рубли в API)."""
 from __future__ import annotations
 
 

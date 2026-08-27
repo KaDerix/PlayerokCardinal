@@ -264,7 +264,7 @@ def init_uploader(cardinal: Cardinal):
                          f"⚠️Чтобы плагин активировался, <u><b>перезагрузите POC!</b></u> (/restart)",
                          reply_markup=keyboard)
 
-    def send_funpay_image(m: types.Message):
+    def send_playerok_image(m: types.Message):
         data = tg.get_state(m.chat.id, m.from_user.id)["data"]
         chat_id, username = data["node_id"], data["username"]
         tg.clear_state(m.chat.id, m.from_user.id, True)
@@ -382,7 +382,7 @@ def init_uploader(cardinal: Cardinal):
     tg.file_handler("upload_auto_delivery_config", upload_auto_delivery_config)
     tg.file_handler("upload_main_config", upload_main_config)
     tg.file_handler(CBT.UPLOAD_PLUGIN, upload_plugin)
-    tg.file_handler(CBT.SEND_FP_MESSAGE, send_funpay_image)
+    tg.file_handler(CBT.SEND_PK_MESSAGE, send_playerok_image)
     tg.file_handler(CBT.UPLOAD_CHAT_IMAGE, upload_chat_image)
     tg.file_handler(CBT.UPLOAD_OFFER_IMAGE, upload_offer_image)
     tg.file_handler(CBT.UPLOAD_BACKUP, upload_backup)

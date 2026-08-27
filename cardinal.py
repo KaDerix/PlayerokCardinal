@@ -141,6 +141,7 @@ class Cardinal(object):
         self.start_time = int(time.time())
         self.instance_id = id(self)
         self.blacklist = cardinal_tools.load_blacklist()
+        self.delivery_tests: dict[str, str] = {}
         self.tg_profile = None
         self.last_tg_profile_update = None
         
@@ -324,9 +325,9 @@ class Cardinal(object):
             self.__init_telegram()
             try:
                 from tg_bot import auto_response_cp, auto_delivery_cp, config_loader_cp, templates_cp, plugins_cp, \
-                                   file_uploader, authorized_users_cp, proxy_cp, default_cp
+                                   file_uploader, authorized_users_cp, proxy_cp, default_cp, auto_restore_cp
                 for module in [auto_response_cp, auto_delivery_cp, config_loader_cp, templates_cp, plugins_cp,
-                               file_uploader, authorized_users_cp, proxy_cp, default_cp]:
+                               file_uploader, authorized_users_cp, proxy_cp, default_cp, auto_restore_cp]:
                     try:
                         self.add_handlers_from_plugin(module)
                     except Exception as e:

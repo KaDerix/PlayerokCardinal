@@ -573,7 +573,17 @@ class Account:
         }
         
         r = self.request("post", f"{self.base_url}/graphql", headers, payload).json()
-        return item_deal(r["data"]["updateDeal"])
+        if r.get("errors"):
+            raise RuntimeError(r["errors"])
+        data = (r.get("data") or {}).get("updateDeal")
+        if not data:
+            raise RuntimeError(f"updateDeal пустой ответ для {deal_id}: {r}")
+        try:
+            return item_deal(data)
+        except Exception:
+            # Мутация уже применена на стороне Playerok — не валим весь вызов из‑за парсинга
+            logger.warning("updateDeal %s: статус обновлён, но ответ не распарсен", deal_id, exc_info=True)
+            return None
 
     def get_games(
         self, 
@@ -1135,14 +1145,20 @@ class Account:
         }
         
         files = {"1": open(photo_file_path, "rb")}
-        map = {"1": ["variables.file"]} if photo_file_path else None
-        payload = {
-            "operations": json.dumps(operations), 
-            "map": json.dumps(map)
-        }
-        
-        r = self.request("post", f"{self.base_url}/graphql", headers, payload, files).json()
-        return temporary_attachment_upload_output(r["data"]["uploadChatImageIntoTemporaryStore"])
+        try:
+            map = {"1": ["variables.file"]} if photo_file_path else None
+            payload = {
+                "operations": json.dumps(operations), 
+                "map": json.dumps(map)
+            }
+            
+            r = self.request("post", f"{self.base_url}/graphql", headers, payload, files).json()
+            return temporary_attachment_upload_output(r["data"]["uploadChatImageIntoTemporaryStore"])
+        finally:
+            try:
+                files["1"].close()
+            except Exception:
+                pass
 
     def send_message(
         self, 
@@ -1205,9 +1221,9 @@ class Account:
         name: str, 
         price: int, 
         description: str, 
-        options: list[GameCategoryOption], 
+        options: list[GameCategoryOption] | dict,
         data_fields: list[GameCategoryDataField],
-        attachments: list[str]
+        attachments: list[str] | None = None,
     ) -> types.Item:
         """
         Создаёт предмет (после создания помещается в черновик, а не сразу выставляется на продажу).
@@ -1241,9 +1257,13 @@ class Account:
         :return: Объект созданного предмета.
         :rtype: `playerokapi.types.Item`
         """
-        payload_attributes = {option.field: option.value for option in options}
-        payload_data_fields = [{"fieldId": field.id, "value": field.value} for field in data_fields]
-        
+        if isinstance(options, dict):
+            payload_attributes = options
+        else:
+            payload_attributes = {option.field: option.value for option in (options or [])}
+        payload_data_fields = [{"fieldId": field.id, "value": field.value} for field in (data_fields or [])]
+        attachments = attachments or []
+
         headers = {"accept": "*/*"}
         operations = {
             "operationName": "createItem",
@@ -1261,21 +1281,30 @@ class Account:
                 "attachments": [None] * len(attachments)
             }
         }
-        
+
+        if not attachments:
+            r = self.request("post", f"{self.base_url}/graphql", headers, operations).json()
+            return item(r["data"]["createItem"])
+
         map = {}
         files = {}
-        
-        for i, att in enumerate(attachments, start=1):
-            map[str(i)] = [f"variables.attachments.{i-1}"]
-            files[str(i)] = open(att, "rb")
-        
-        payload = {
-            "operations": json.dumps(operations),
-            "map": json.dumps(map)
-        }
+        try:
+            for i, att in enumerate(attachments, start=1):
+                map[str(i)] = [f"variables.attachments.{i-1}"]
+                files[str(i)] = open(att, "rb")
 
-        r = self.request("post", f"{self.base_url}/graphql", headers, payload, files).json()
-        return item(r["data"]["createItem"])
+            payload = {
+                "operations": json.dumps(operations),
+                "map": json.dumps(map)
+            }
+            r = self.request("post", f"{self.base_url}/graphql", headers, payload, files).json()
+            return item(r["data"]["createItem"])
+        finally:
+            for fobj in files.values():
+                try:
+                    fobj.close()
+                except Exception:
+                    pass
     
     def update_item(
         self, 

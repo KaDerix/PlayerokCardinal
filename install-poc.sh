@@ -1,203 +1,362 @@
 #!/bin/bash
+# Playerok Cardinal — Linux installer
+set -euo pipefail
 commands='17'
 
-RED='\033[1;91m'
-CYAN='\033[1;96m'
-GREEN='\033[1;92m'
-PURPLE_LIGHT='\033[5;35m'
-RESET='\033[0m'
+R=$'\033[0m'
+B=$'\033[1m'
+RED=$'\033[1;91m'
+YEL=$'\033[1;93m'
+GRN=$'\033[1;92m'
 
-start_process_line="${PURPLE_LIGHT}################################################################################"
-end_process_line="################################################################################${RESET}"
+# палитра как в Utils/banner.py
+B1=$'\033[38;5;27m'
+B2=$'\033[38;5;33m'
+B3=$'\033[38;5;39m'
+B4=$'\033[38;5;45m'
+B5=$'\033[38;5;51m'
+W=$'\033[38;5;255m'
+D=$'\033[38;5;245m'
+F=$'\033[38;5;238m'
 
-logo="\e[38;5;235m      ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·\e[0m
-\e[38;5;235m    \e[38;5;99m▄\e[38;5;135m▄\e[38;5;141m▄\e[38;5;135m▄\e[38;5;99m▄\e[38;5;235m                                      \e[38;5;99m▄\e[38;5;135m▄\e[38;5;141m▄\e[38;5;135m▄\e[38;5;99m▄\e[38;5;235m    \e[0m
-\e[38;5;235m  \e[38;5;99m▄\e[38;5;135m█\e[38;5;141m█\e[38;5;135m█\e[38;5;99m▄\e[38;5;235m  \e[38;5;220m♛\e[0m \e[1;38;5;255mP\e[0m\e[38;5;141mL\e[0m\e[38;5;135mA\e[0m\e[38;5;99mY\e[0m\e[38;5;135mE\e[0m\e[38;5;141mR\e[0m\e[38;5;135mO\e[0m\e[38;5;99mK\e[0m  \e[38;5;45mC\e[0m\e[38;5;51mA\e[0m\e[38;5;45mR\e[0m\e[38;5;39mD\e[0m\e[38;5;51mI\e[0m\e[38;5;45mN\e[0m\e[38;5;39mA\e[0m\e[38;5;51mL\e[0m \e[38;5;220m♛\e[0m \e[38;5;235m\e[38;5;99m▄\e[38;5;135m█\e[38;5;141m█\e[38;5;135m█\e[38;5;99m▄\e[38;5;235m  \e[0m
-\e[38;5;235m \e[38;5;99m█\e[38;5;135m█\e[38;5;141m█\e[38;5;135m█\e[38;5;99m█\e[38;5;235m \e[38;5;237m╭\e[38;5;99m────────────────────────────────────────\e[38;5;237m╮\e[0m \e[38;5;235m\e[38;5;99m█\e[38;5;135m█\e[38;5;141m█\e[38;5;135m█\e[38;5;99m█\e[38;5;235m \e[0m
-\e[38;5;235m \e[38;5;99m█\e[38;5;135m█\e[38;5;141m▓\e[38;5;135m▓\e[38;5;99m█\e[38;5;235m \e[38;5;237m│\e[0m  \e[38;5;141m◆\e[0m \e[38;5;245mавтоматизация\e[0m \e[38;5;99mplayerok.com\e[0m \e[38;5;141m◆\e[0m  \e[38;5;237m│\e[0m \e[38;5;235m\e[38;5;99m█\e[38;5;135m▓\e[38;5;141m▓\e[38;5;135m█\e[38;5;99m█\e[38;5;235m \e[0m
-\e[38;5;235m \e[38;5;99m█\e[38;5;135m█\e[38;5;141m█\e[38;5;135m█\e[38;5;99m█\e[38;5;235m \e[38;5;237m╰\e[38;5;99m────────────────────────────────────────\e[38;5;237m╯\e[0m \e[38;5;235m\e[38;5;99m█\e[38;5;135m█\e[38;5;141m█\e[38;5;135m█\e[38;5;99m█\e[38;5;235m \e[0m
-\e[38;5;235m  \e[38;5;99m▀\e[38;5;135m█\e[38;5;141m█\e[38;5;135m█\e[38;5;99m▀\e[38;5;235m    \e[38;5;141m▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔\e[0m    \e[38;5;235m\e[38;5;99m▀\e[38;5;135m█\e[38;5;141m█\e[38;5;135m█\e[38;5;99m▀\e[38;5;235m  \e[0m
-\e[38;5;235m      ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·\e[0m"
+W_INNER=50
+BOX_W=50
 
-clear
-echo -e $logo
+_repeat() {
+  local c="$1" n="$2" i out=
+  for ((i = 0; i < n; i++)); do out+="$c"; done
+  printf '%s' "$out"
+}
 
-echo -e "\n\n${RED} * GitHub ${CYAN}github.com/KaDerix/PlayerokCardinal${RESET}"
-echo -e "${RED} * Telegram ${CYAN}t.me/KaDerix${RESET}"
-echo -e "\n\n\n"
+_row() {
+  local visible="$1"
+  local display="${2:-$1}"
+  local pad=$((W_INNER - ${#visible}))
+  ((pad < 0)) && pad=0
+  local left=$((pad / 2))
+  local right=$((pad - left))
+  printf "${B1}║${R}%*s%s%*s${B1}║${R}\n" "$left" "" "$display" "$right" ""
+}
 
-echo -ne "${CYAN}Введите имя пользователя, от имени которого будет запускаться бот (например, 'poc' или 'cardinal'): ${RESET}"
+print_banner() {
+  local ver="${1:-}"
+  echo ""
+  printf "${B1}╔%s╗${R}\n" "$(_repeat '═' "$W_INNER")"
+  _row ""
+  _row "PLAYEROK  CARDINAL" "${W}${B}PLAYEROK${R}  ${B5}${B}CARDINAL${R}"
+  _row "автоматизация  playerok.com" "${D}автоматизация${R}  ${B3}${B}playerok.com${R}"
+  _row "* . . . . . . . . . . . . . . *" "${B2}*${R} ${F}. . . . . . . . . . . . . .${R} ${B2}*${R}"
+  printf "${B2}╠%s╣${R}\n" "$(_repeat '─' "$W_INNER")"
+  _row ""
+  if [[ -n "$ver" ]]; then
+    _row "v${ver}" "${B4}${B}v${ver}${R}"
+  else
+    _row "Linux installer" "${B4}${B}Linux installer${R}"
+  fi
+  _row "github.com/KaDerix/PlayerokCardinal" "${D}github.com/KaDerix/PlayerokCardinal${R}"
+  _row "t.me/KaDerix" "${B4}t.me/KaDerix${R}"
+  _row ""
+  printf "${B1}╚%s╝${R}\n" "$(_repeat '═' "$W_INNER")"
+  echo ""
+}
+
+# строка рамки: видимая ширина ровно BOX_W (цвета не считаются)
+_box_row() {
+  local visible="$1"
+  local display="${2:-$1}"
+  if ((${#visible} > BOX_W)); then
+    visible="${visible:0:$((BOX_W - 1))}…"
+    display="$visible"
+  fi
+  printf "  ${B1}│${R}%s%*s${B1}│${R}\n" "$display" "$((BOX_W - ${#visible}))" ""
+}
+
+box() {
+  local title="$1"
+  echo ""
+  printf "  ${B1}┌%s┐${R}\n" "$(_repeat '─' "$BOX_W")"
+  _box_row "$title" "${B4}${B}${title}${R}"
+  printf "  ${B1}└%s┘${R}\n" "$(_repeat '─' "$BOX_W")"
+  echo ""
+}
+
+print_finish() {
+  local user="$1"
+  local svc="PlayerokCardinal@${user}"
+  local cmd
+
+  echo -e "  ${GRN}${B}Установка завершена${R}"
+  echo ""
+  echo -e "  ${YEL}${B}Сделай скриншот${R} ${D}— пригодится для поддержки${R}"
+  echo ""
+  printf "  ${D}%-10s${R} ${B}%s${R}\n" "Сервис" "$svc"
+  printf "  ${D}%-10s${R} ${GRN}%s${R}\n" "Статус" "active"
+  printf "  ${D}%-10s${R} %s\n" "Telegram" "напиши своему боту"
+  echo ""
+
+  printf "  ${B1}┌%s┐${R}\n" "$(_repeat '─' "$BOX_W")"
+  _box_row " Управление" " ${B}Управление${R}"
+  printf "  ${B1}├%s┤${R}\n" "$(_repeat '─' "$BOX_W")"
+  for cmd in \
+    " sudo pocctl restart" \
+    " sudo pocctl logs" \
+    " sudo pocctl health" \
+    " systemctl status ${svc}"
+  do
+    _box_row "$cmd" "$cmd"
+  done
+  printf "  ${B1}└%s┘${R}\n" "$(_repeat '─' "$BOX_W")"
+  echo ""
+  echo -e "  ${D}Подсказка:${R} /home/${user}/POC_SERVICE.txt"
+  echo -e "  ${RED}*${R} ${D}Не пиши PlayerokCardinalPOC — после @ имя пользователя (${user})${R}"
+  echo ""
+}
+
+fail() {
+  local msg="$1"
+  local step="$2"
+  echo ""
+  echo -e "${RED}${B}✗ Ошибка${R} ${D}(${step}/${commands})${R}"
+  echo -e "${RED}${msg}${R}"
+  echo ""
+  exit 2
+}
+
+ok() {
+  echo -e "  ${GRN}✓${R} $1"
+}
+
+info() {
+  echo -e "  ${B3}›${R} $1"
+}
+
+ask() {
+  echo -ne "  ${B4}${B}?${R} $1 "
+}
+
+_clear() { clear 2>/dev/null || printf '\033c' || true; }
+
+# ── старт ──────────────────────────────────────────────
+_clear
+print_banner
+
+echo -e "  ${D}GitHub${R}    ${B3}github.com/KaDerix/PlayerokCardinal${R}"
+echo -e "  ${D}Telegram${R}  ${B4}t.me/KaDerix${R}"
+echo ""
+echo -e "  ${D}Установщик создаст пользователя Linux и systemd-сервис.${R}"
+echo ""
+
+ask "Имя пользователя для бота ${D}(poc / cardinal)${R}:"
 while true; do
   read username
-  if [[ "$username" =~ ^[a-zA-Z][a-zA-Z0-9_-]+$ ]]; then
+  username="${username,,}"  # Linux: всегда lowercase (POC → poc)
+  if [[ "$username" =~ ^[a-z][a-z0-9_-]+$ ]]; then
     if id "$username" &>/dev/null; then
-      echo -ne "\n${RED}Пользователь уже существует.${RESET} Использовать его? (y/n): "
+      echo ""
+      info "аккаунт ${B}${username}${R} ещё в системе ${D}(/etc/passwd)${R}"
+      info "удаление папки по SFTP пользователя ${B}не${R} удаляет"
+      echo ""
+      ask "y = использовать  /  r = удалить и создать заново  /  n = другое имя:"
       read use_existing
-      if [[ "$use_existing" =~ ^[Yy]$ ]]; then
-        echo -e "${CYAN}Будет использован существующий пользователь: $username${RESET}"
-        break
-      else
-        echo -ne "${CYAN}Введите другое имя пользователя: ${RESET}"
-      fi
+      case "$use_existing" in
+        [yY]|[yY][eE][sS])
+          ok "используем существующего: ${B}${username}${R}"
+          break
+          ;;
+        [rR]|[rR][eE][cC][rR][eE][aA][tT][eE])
+          info "останавливаю сервис (если был)…"
+          sudo systemctl stop "PlayerokCardinal@${username}" 2>/dev/null || true
+          sudo systemctl disable "PlayerokCardinal@${username}" 2>/dev/null || true
+          # -r удаляет и home; если home уже снесли — fallback без -r
+          if sudo userdel -r "$username" 2>/dev/null || sudo userdel "$username" 2>/dev/null; then
+            ok "пользователь ${B}${username}${R} удалён — создадим заново"
+            break
+          else
+            echo -e "  ${RED}Не удалось удалить ${username}.${R}"
+            echo -e "  ${D}Вручную: sudo userdel -r ${username}${R}"
+            ask "Другое имя:"
+          fi
+          ;;
+        *)
+          ask "Другое имя:"
+          ;;
+      esac
     else
       break
     fi
   else
-    echo -ne "\n${RED}Имя пользователя содержит недопустимые символы. ${CYAN}Имя должно начинаться с буквы и может включать только буквы, цифры, '_', или '-'. Пожалуйста, введите другое имя пользователя: ${RESET}"
+    echo -e "  ${RED}Недопустимое имя.${R} ${D}латиница, цифра, _/- ; начинать с буквы${R}"
+    ask "Повтори:"
   fi
 done
 
-echo -e "\n${GREEN}Сервис systemd будет называться: PlayerokCardinal@${username}${RESET}"
-echo -e "${CYAN}(символ @ — это имя пользователя Linux, которое вы только что указали)${RESET}\n"
-sleep 2
+echo ""
+ok "сервис: ${B}PlayerokCardinal@${username}${R}"
+info "после @ — имя пользователя Linux"
+echo ""
+sleep 1
 
-distro_version=$(lsb_release -rs)
+distro_version=$(lsb_release -rs 2>/dev/null || echo "unknown")
 
-clear
-echo -e "${start_process_line}\nДобавляю репозитории...\n${end_process_line}"
+# ── репозитории ────────────────────────────────────────
+_clear
+print_banner
+box "1/6  Репозитории и пакеты"
 
 if ! sudo apt update ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при обновлении списка пакетов. (1/${commands})\n${end_process_line}"
-  exit 2
+  fail "apt update" "1"
 fi
+ok "apt update"
 
 if ! sudo apt install -y software-properties-common ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при установке software-properties-common. (2/${commands})\n${end_process_line}"
-  exit 2
+  fail "software-properties-common" "2"
 fi
+ok "software-properties-common"
 
 case $distro_version in
-  "22.04" | "22.10" | "23.04" | "23.10" | "24.04" | "24.10")
-    ;;
-  "12")
+  "22.04" | "22.10" | "23.04" | "23.10" | "24.04" | "24.10" | "12")
     ;;
   "11")
     if ! sudo apt install -y gnupg ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при установке gnupg. (3.1/${commands})\n${end_process_line}"
-      exit 2
+      fail "gnupg" "3.1"
     fi
-
     if ! sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys BA6932366A755776 ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при добавлении ключа репозитория. (3.2/${commands})\n${end_process_line}"
-      exit 2
+      fail "apt-key" "3.2"
     fi
-
     if ! sudo add-apt-repository -s "deb https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu focal main" ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при добавлении репозитория. (3.3/${commands})\n${end_process_line}"
-      exit 2
+      fail "deadsnakes repo" "3.3"
     fi
-
     if ! sudo tee /etc/apt/preferences.d/10deadsnakes-ppa >/dev/null <<EOF
 Package: *
 Pin: release o=LP-PPA-deadsnakes
 Pin-Priority: 100
 EOF
     then
-      echo -e "${start_process_line}\nПроизошла ошибка при добавлении приоритета репозитория. (3.4/${commands})\n${end_process_line}"
-      exit 2
+      fail "pin preferences" "3.4"
     fi
     ;;
   *)
     if ! sudo add-apt-repository -y ppa:deadsnakes/ppa ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при добавлении репозитория. (3/${commands})\n${end_process_line}"
-      exit 2
+      fail "deadsnakes ppa" "3"
     fi
     ;;
 esac
 
 if ! sudo apt update ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при обновлении списка пакетов. (4/${commands})\n${end_process_line}"
-  exit 2
+  fail "apt update (2)" "4"
 fi
-
-clear
-echo -e "$start_process_line\nУстанавливаю необходимые пакеты...\n$end_process_line"
+ok "репозитории готовы"
 
 if ! sudo apt install -y curl ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при установке Curl. (5/${commands})\n${end_process_line}"
-  exit 2
+  fail "curl" "5"
 fi
+ok "curl"
 
 if ! sudo apt install -y unzip ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при установке Unzip. (6/${commands})\n${end_process_line}"
-  exit 2
+  fail "unzip" "6"
 fi
+ok "unzip"
 
-clear
-echo -e "$start_process_line\nУстанавливаю Python...\n$end_process_line"
+# ── Python ──────────────────────────────────────────────
+_clear
+print_banner
+box "2/6  Python"
 
 case $distro_version in
   "24.04" | "24.10")
     if ! sudo apt install -y python3.12 python3.12-dev python3.12-gdbm python3.12-venv ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при установке Python. (7/${commands})\n${end_process_line}"
-      exit 2
+      fail "python3.12" "7"
     fi
+    ok "python3.12"
     ;;
   *)
     if ! sudo apt install -y python3.11 python3.11-dev python3.11-gdbm python3.11-venv ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при установке Python. (7/${commands})\n${end_process_line}"
-      exit 2
+      fail "python3.11" "7"
     fi
+    ok "python3.11"
     ;;
 esac
 
-clear
-echo -e "$start_process_line\nСоздаю пользователя и устанавливаю/обновляю Pip...\n$end_process_line"
+# ── пользователь + venv ─────────────────────────────────
+_clear
+print_banner
+box "3/6  Пользователь и venv"
+
+ensure_home() {
+  local u="$1"
+  local home="/home/$u"
+  if [[ -d "$home" ]]; then
+    return 0
+  fi
+  info "нет ${B}${home}${R} — восстанавливаю home"
+  if command -v mkhomedir_helper >/dev/null 2>&1; then
+    sudo mkhomedir_helper "$u" 2>/dev/null || true
+  fi
+  if [[ ! -d "$home" ]]; then
+    if ! sudo mkdir -p "$home"; then
+      fail "mkdir home" "8.1"
+    fi
+    sudo cp -a /etc/skel/. "$home/" 2>/dev/null || true
+  fi
+  if ! sudo chown -R "$u:$u" "$home"; then
+    fail "chown home" "8.2"
+  fi
+  sudo chmod 755 "$home" || true
+  ok "home: ${B}${home}${R}"
+}
 
 if id "$username" &>/dev/null; then
-  echo -e "${CYAN}Пользователь $username уже существует, пропускаем создание.${RESET}"
+  info "пользователь ${B}${username}${R} уже существует"
+  ensure_home "$username"
 else
-  if ! sudo useradd -m $username ; then
-    echo -e "${start_process_line}\nПроизошла ошибка при создании пользователя. (8/${commands})\n${end_process_line}"
-    exit 2
+  if ! sudo useradd -m "$username" ; then
+    fail "useradd" "8"
   fi
+  ok "создан пользователь ${B}${username}${R}"
 fi
 
 venv_exists=0
 if [[ -x "/home/$username/pyvenv/bin/python" ]]; then
   venv_exists=1
-  echo -e "${CYAN}Виртуальное окружение уже есть, обновляю pip...${RESET}"
+  info "venv уже есть — обновляю pip"
 fi
 
 if [[ "$venv_exists" -eq 0 ]]; then
-case $distro_version in
-  "24.04" | "24.10")
-    if ! sudo -u $username python3.12 -m venv /home/$username/pyvenv ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при создании виртуального окружения. (9/${commands})\n${end_process_line}"
-      exit 2
-    fi
-    ;;
-  *)
-    if ! sudo -u $username python3.11 -m venv /home/$username/pyvenv ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при создании виртуального окружения. (9/${commands})\n${end_process_line}"
-      exit 2
-    fi
-    ;;
-esac
+  case $distro_version in
+    "24.04" | "24.10")
+      if ! sudo -u "$username" python3.12 -m venv "/home/$username/pyvenv" ; then
+        fail "venv python3.12" "9"
+      fi
+      ;;
+    *)
+      if ! sudo -u "$username" python3.11 -m venv "/home/$username/pyvenv" ; then
+        fail "venv python3.11" "9"
+      fi
+      ;;
+  esac
+  ok "venv создан"
 fi
 
-if ! sudo /home/$username/pyvenv/bin/python -m ensurepip --upgrade ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при установке Pip. (10/${commands})\n${end_process_line}"
-  exit 2
+if ! sudo "/home/$username/pyvenv/bin/python" -m ensurepip --upgrade ; then
+  fail "ensurepip" "10"
 fi
-
-if ! sudo -u $username /home/$username/pyvenv/bin/python -m pip install --upgrade pip ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при обновлении Pip. (11/${commands})\n${end_process_line}"
-  exit 2
+if ! sudo -u "$username" "/home/$username/pyvenv/bin/python" -m pip install --upgrade pip ; then
+  fail "pip upgrade" "11"
 fi
-
-if ! sudo chown -hR $username:$username /home/$username/pyvenv ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при изменении владельца виртуального окружения. (12/${commands})\n${end_process_line}"
-  exit 2
+if ! sudo chown -hR "$username:$username" "/home/$username/pyvenv" ; then
+  fail "chown venv" "12"
 fi
+ok "pip готов"
 
-clear
-echo -e "$start_process_line\nУстанавливаю PlayerokCardinal...\n$end_process_line"
+# ── клон / обновление ───────────────────────────────────
+_clear
+print_banner
+box "4/6  PlayerokCardinal"
 
 if ! sudo apt install -y git ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при установке Git. (13/${commands})\n${end_process_line}"
-  exit 2
+  fail "git" "13"
 fi
+ok "git"
 
 gh_repo="KaDerix/PlayerokCardinal"
 poc_dir="/home/$username/PlayerokCardinal"
@@ -205,176 +364,144 @@ poc_dir="/home/$username/PlayerokCardinal"
 sudo git config --global --add safe.directory "$poc_dir" 2>/dev/null || true
 
 if [[ -d "$poc_dir/.git" ]]; then
-  echo -e "${CYAN}Репозиторий найден, выполняю git pull...${RESET}"
-  if ! sudo -u $username git -C "$poc_dir" pull ; then
-    echo -e "${start_process_line}\nПроизошла ошибка при обновлении репозитория. (14/${commands})\n${end_process_line}"
-    exit 2
+  info "репозиторий найден — git pull"
+  if ! sudo -u "$username" git -C "$poc_dir" pull ; then
+    fail "git pull" "14"
   fi
+  ok "обновлено"
 elif [[ -d "$poc_dir" ]]; then
-  echo -e "${RED}Папка $poc_dir существует, но это не git-репозиторий.${RESET}"
-  echo -e "${CYAN}Переименуйте или удалите её вручную и запустите установку снова.${RESET}"
+  echo -e "  ${RED}Папка $poc_dir есть, но это не git-репозиторий.${R}"
+  echo -e "  ${D}Переименуй/удали её и запусти установку снова.${R}"
   exit 2
 else
-  if ! sudo -u $username git clone https://github.com/${gh_repo}.git "$poc_dir" ; then
-    echo -e "${start_process_line}\nПроизошла ошибка при клонировании репозитория. (14/${commands})\n${end_process_line}"
-    exit 2
+  if ! sudo -u "$username" git clone "https://github.com/${gh_repo}.git" "$poc_dir" ; then
+    fail "git clone" "14"
   fi
+  ok "клонировано"
 fi
 
-if ! sudo -u $username /home/$username/pyvenv/bin/pip install -U -r "$poc_dir/requirements.txt" ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при установке необходимых Py-пакетов. (15/${commands})\n${end_process_line}"
-  exit 2
+if ! sudo -u "$username" "/home/$username/pyvenv/bin/pip" install -U -r "$poc_dir/requirements.txt" ; then
+  fail "pip install -r requirements.txt" "15"
 fi
+ok "зависимости установлены"
 
-clear
-echo -e "$start_process_line\nСоздаю ссылку на файл фонового процесса...\n$end_process_line"
+# ── systemd + pocctl ────────────────────────────────────
+_clear
+print_banner
+box "5/6  Systemd и pocctl"
 
-if ! sudo ln -sf /home/$username/PlayerokCardinal/PlayerokCardinal@.service /etc/systemd/system/PlayerokCardinal@.service ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при создании ссылки на файл фонового процесса. (16/${commands})\n${end_process_line}"
-  exit 2
+if ! sudo ln -sf "/home/$username/PlayerokCardinal/PlayerokCardinal@.service" /etc/systemd/system/PlayerokCardinal@.service ; then
+  fail "symlink service" "16"
 fi
+ok "systemd unit"
 
-if ! sudo install -m 755 /home/$username/PlayerokCardinal/scripts/pocctl.sh /usr/local/bin/pocctl ; then
-  echo -e "${start_process_line}\nПроизошла ошибка при установке pocctl. (16.1/${commands})\n${end_process_line}"
-  exit 2
+if ! sudo install -m 755 "/home/$username/PlayerokCardinal/scripts/pocctl.sh" /usr/local/bin/pocctl ; then
+  fail "pocctl" "16.1"
 fi
+ok "pocctl"
 
 sudo tee /etc/default/pocctl >/dev/null <<EOF
-# Playerok Cardinal — пользователь Linux из install-poc.sh
 POC_USER=${username}
 EOF
 chmod 644 /etc/default/pocctl
 
-sudo tee /home/$username/POC_SERVICE.txt >/dev/null <<EOF
+sudo tee "/home/$username/POC_SERVICE.txt" >/dev/null <<EOF
 Playerok Cardinal — управление сервисом
 ======================================
-Как в FunPay Cardinal: имя сервиса = PlayerokCardinal@ИМЯ_ПОЛЬЗОВАТЕЛЯ
-
-Ваш пользователь Linux: ${username}
+Пользователь Linux: ${username}
 Systemd unit: PlayerokCardinal@${username}
 
-Перезапуск:
-  sudo systemctl restart PlayerokCardinal@${username}
+sudo systemctl restart PlayerokCardinal@${username}
+sudo systemctl stop PlayerokCardinal@${username}
+sudo systemctl start PlayerokCardinal@${username}
+sudo systemctl status PlayerokCardinal@${username} -n100
+sudo systemctl enable PlayerokCardinal@${username}
 
-Остановка / запуск:
-  sudo systemctl stop PlayerokCardinal@${username}
-  sudo systemctl start PlayerokCardinal@${username}
-
-Логи:
-  sudo systemctl status PlayerokCardinal@${username} -n100
-
-Автозагрузка:
-  sudo systemctl enable PlayerokCardinal@${username}
-
-Сокращения (pocctl знает пользователя ${username}):
+Сокращения:
   sudo pocctl restart
   sudo pocctl logs
   sudo pocctl health
 
-НЕ используйте: PlayerokCardinalPOC (это не имя сервиса!)
+НЕ используй: PlayerokCardinalPOC
 EOF
-sudo chown $username:$username /home/$username/POC_SERVICE.txt
+sudo chown "$username:$username" "/home/$username/POC_SERVICE.txt"
+ok "подсказка → /home/${username}/POC_SERVICE.txt"
 
-clear
-echo -e "$start_process_line\nНастраиваю кодировку сервера...\n$end_process_line"
+# ── локаль ──────────────────────────────────────────────
+_clear
+print_banner
+box "6/6  Локаль и настройка"
 
 case $distro_version in
   "11" | "12")
     if ! sudo apt install -y locales locales-all ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при установке локализаций. (17/${commands})\n${end_process_line}"
-      exit 2
+      fail "locales" "17"
     fi
     ;;
   *)
     if ! sudo apt install -y language-pack-en ; then
-      echo -e "${start_process_line}\nПроизошла ошибка при установке языковых пакетов. (17/${commands})\n${end_process_line}"
-      exit 2
+      fail "language-pack-en" "17"
     fi
     ;;
 esac
+ok "локаль"
 
-clear
-echo -e $logo
-echo -e '\n\n\e[1;91m * GitHub \e[1;96mgithub.com/KaDerix/PlayerokCardinal\e[0m'
-echo -e '\e[1;91m * Telegram \e[1;96mt.me/KaDerix\e[0m'
+# ── first setup ─────────────────────────────────────────
+_clear
+print_banner
+box "Первичная настройка"
 
-echo -e "\n\n\e[1;92m################################################################################"
-echo -e "Установка завершена."
-echo -e "Запускаю первичную настройку..."
-echo -e "################################################################################\e[0m"
-sleep 3
-clear
-
-echo -e "\n${CYAN}Начинаю первичную настройку. Пожалуйста, ответь на все вопросы...${RESET}\n"
-echo -e "${CYAN}ВНИМАНИЕ: Сейчас будет запущена первичная настройка.${RESET}"
-echo -e "${CYAN}Пожалуйста, ответь на все вопросы, которые появятся на экране.${RESET}\n"
-sleep 3
-
-# Проверяем, есть ли уже конфиг
-if [ ! -f "/home/$username/PlayerokCardinal/configs/_main.cfg" ]; then
-    # Запускаем first_setup с правильным перенаправлением stdin (как в FunPayCardinal)
-    sudo -u $username LANG=en_US.utf8 /home/$username/pyvenv/bin/python /home/$username/PlayerokCardinal/main.py <&1
-    
-    # Проверяем, создался ли конфиг
-    if [ ! -f "/home/$username/PlayerokCardinal/configs/_main.cfg" ]; then
-        echo -e "\n${RED}ОШИБКА: Конфиг не был создан!${RESET}"
-        echo -e "${CYAN}Попробуй запустить вручную:${RESET}"
-        echo -e "${CYAN}sudo -u $username bash -c 'cd /home/$username/PlayerokCardinal && /home/$username/pyvenv/bin/python main.py'${RESET}"
-        exit 1
-    fi
-    echo -e "\n${GREEN}✓ Первичная настройка завершена!${RESET}\n"
-else
-    echo -e "\n${CYAN}Конфиг уже существует, пропускаю первичную настройку.${RESET}\n"
-    echo -ne "\n${RED}Файл конфигурации найден.${RESET} Хотите добавить Telegram прокси? [y/n]:  "
-    read edit_config
-    case "$edit_config" in
-        [yY]|[yY][eE][sS])
-            echo -ne "${CYAN}Запускаем редактирование Telegram прокси...${RESET}\n\n"
-            sudo -u $username LANG=en_US.utf8 /home/$username/pyvenv/bin/python -W ignore::SyntaxWarning /home/$username/PlayerokCardinal/setup_telegram_proxy.py <&1
-            ;;
-        *)
-            echo -ne "${CYAN}Редактирование пропущено.${RESET}"
-            ;;
-    esac
-fi
-
+info "ответь на вопросы на экране"
+echo ""
 sleep 2
 
+if [ ! -f "/home/$username/PlayerokCardinal/configs/_main.cfg" ]; then
+  sudo -u "$username" LANG=en_US.utf8 "/home/$username/pyvenv/bin/python" "/home/$username/PlayerokCardinal/main.py" <&1
+
+  if [ ! -f "/home/$username/PlayerokCardinal/configs/_main.cfg" ]; then
+    echo -e "\n  ${RED}Конфиг не создан.${R}"
+    echo -e "  ${D}Запусти вручную:${R}"
+    echo -e "  ${B3}sudo -u $username bash -c 'cd /home/$username/PlayerokCardinal && /home/$username/pyvenv/bin/python main.py'${R}"
+    exit 1
+  fi
+  echo ""
+  ok "первичная настройка завершена"
+else
+  info "конфиг уже есть — setup пропущен"
+  echo ""
+  ask "Добавить Telegram proxy? ${D}(y/n)${R}:"
+  read edit_config
+  case "$edit_config" in
+    [yY]|[yY][eE][sS])
+      sudo -u "$username" LANG=en_US.utf8 "/home/$username/pyvenv/bin/python" -W ignore::SyntaxWarning "/home/$username/PlayerokCardinal/setup_telegram_proxy.py" <&1
+      ;;
+    *)
+      info "пропущено"
+      ;;
+  esac
+fi
+
+sleep 1
+
 sudo systemctl daemon-reload
-sudo systemctl enable PlayerokCardinal@$username.service
-sudo systemctl restart PlayerokCardinal@$username.service
+sudo systemctl enable "PlayerokCardinal@$username.service"
+sudo systemctl restart "PlayerokCardinal@$username.service"
 sleep 3
 
-if ! systemctl is-active --quiet PlayerokCardinal@$username.service ; then
-  echo -e "\n${RED}ОШИБКА: сервис PlayerokCardinal@${username} не запустился!${RESET}"
-  echo -e "${CYAN}Последние строки лога:${RESET}"
-  journalctl -u PlayerokCardinal@$username.service -n 40 --no-pager
-  echo -e "\n${CYAN}Проверка: sudo pocctl health${RESET}"
+if ! systemctl is-active --quiet "PlayerokCardinal@$username.service" ; then
+  echo ""
+  echo -e "  ${RED}${B}Сервис не запустился:${R} PlayerokCardinal@${username}"
+  echo -e "  ${D}Последние строки лога:${R}"
+  journalctl -u "PlayerokCardinal@$username.service" -n 40 --no-pager
+  echo -e "\n  ${D}Проверка:${R} ${B3}sudo pocctl health${R}"
   exit 1
 fi
 
-clear
-echo -e $logo
-echo -e '\n\n\e[1;91m * GitHub \e[1;96mgithub.com/KaDerix/PlayerokCardinal\e[0m'
-echo -e '\e[1;91m * Telegram \e[1;96mt.me/KaDerix\e[0m'
+# ── финал ───────────────────────────────────────────────
+_clear
+print_banner
+print_finish "$username"
 
-echo -e "\n\n\e[1;92m################################################################################"
-echo -e "${RED}!СДЕЛАЙ СКРИНШОТ!${CYAN}!СДЕЛАЙ СКРИНШОТ!${RED}!СДЕЛАЙ СКРИНШОТ!${CYAN}!СДЕЛАЙ СКРИНШОТ!"
-echo -e "\nГотово!"
-echo -e "POC запущен как фоновый процесс!"
-echo -e "Теперь напиши своему Telegram-боту."
-echo -e "\n${CYAN}Имя сервиса: PlayerokCardinal@${username} (@${username} — пользователь Linux из установки)${RESET}"
-echo -e "\n\e[1;92mДля остановки POC используй команду \e[93msudo systemctl stop PlayerokCardinal@${username}\e[1;92m"
-echo -e "Для запуска POC используй команду \e[93msudo systemctl start PlayerokCardinal@${username}\e[1;92m"
-echo -e "Для перезапуска POC используй команду \e[93msudo systemctl restart PlayerokCardinal@${username}\e[1;92m"
-echo -e "Для просмотра логов используй команду \e[93msudo systemctl status PlayerokCardinal@${username} -n100\e[1;92m"
-echo -e "Для добавления POC в автозагрузку используй команду \e[93msudo systemctl enable PlayerokCardinal@${username}\e[1;92m"
-echo -e "\n\e[1;92mСокращение: \e[93msudo pocctl restart\e[1;92m (то же самое, пользователь ${username} сохранён в /etc/default/pocctl)"
-echo -e "Подсказка: \e[93m/home/${username}/POC_SERVICE.txt\e[1;92m"
-echo -e "${RED}* НЕ пиши PlayerokCardinalPOC — после @ идёт имя пользователя (${username}), не аббревиатура POC.\e[1;92m"
-echo -e "################################################################################\e[0m"
-
-echo -ne "\n\n${CYAN}Сделал скриншот? ${PURPLE_LIGHT}Тогда нажми Enter, чтобы продолжить.${RESET}"
+ask "Скриншот сделан? Enter → выход"
 read
-clear
-
+_clear

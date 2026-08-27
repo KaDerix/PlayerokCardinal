@@ -1,5 +1,5 @@
 #!/bin/bash
-# Playerok Cardinal — управление systemd-сервисом (как FunPayCardinal@${username}).
+# Playerok Cardinal — управление systemd-сервисом .
 # Использование: sudo pocctl [start|stop|restart|status|logs|update|health]
 
 set -euo pipefail
@@ -40,7 +40,7 @@ unit_name() {
 
 usage() {
     cat <<EOF
-Playerok Cardinal — управление сервисом (как FunPay Cardinal)
+Playerok Cardinal — управление сервисом 
 
   sudo pocctl start     — запустить бота
   sudo pocctl stop      — остановить

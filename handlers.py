@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from cardinal import Cardinal
@@ -157,13 +157,24 @@ def enrich_deal_handler(c: Cardinal, event: NewDealEvent | ItemPaidEvent):
     deal = event.deal
     if not deal or not getattr(deal, "item", None) or not getattr(deal.item, "id", None):
         return
+    try:
+        from Utils import lots_cache
+        lots_cache.upsert(deal.item)
+    except Exception:
+        pass
     if getattr(deal.item, "name", None) and getattr(deal.item, "category", None):
         return
     try:
         deal.item = c.account.get_item(id=deal.item.id)
         logger.debug(f"Сделка #{deal.id} обогащена данными товара «{getattr(deal.item, 'name', '?')}»")
+        try:
+            from Utils import lots_cache
+            lots_cache.upsert(deal.item)
+            lots_cache.save()
+        except Exception:
+            pass
     except Exception as e:
-        logger.warning(f"Не удалось обогатить сделку #{deal.id}: {e}")
+        logger.debug(f"Не удалось обогатить сделку #{deal.id}: {e}")
 
 
 _recent_auto_deliveries: dict[str, float] = {}
@@ -249,111 +260,349 @@ def review_reply_handler(c: Cardinal, event: NewReviewEvent):
     Thread(target=c.send_message, args=(chat.id, text, buyer, watermark), daemon=True).start()
 
 
+def _find_delivery_config(c: Cardinal, lot_id: str | None, item_name: str | None) -> dict | None:
+    configs = getattr(c, "AD_CFG", None) or []
+    if lot_id:
+        for config in configs:
+            if str(config.get("lot_id") or "") == str(lot_id):
+                return config
+    name = (item_name or "").strip().lower()
+    if name:
+        for config in configs:
+            if str(config.get("name") or "").strip().lower() == name:
+                return config
+    return None
+
+
+def _sync_ad_lot_id(c: Cardinal, section_name: str, new_lot_id: str) -> None:
+    if not section_name or not new_lot_id:
+        return
+    try:
+        from Utils import ad_config as adc
+        raw = c.RAW_AD_CFG
+        if not raw.has_section(section_name):
+            return
+        old = raw[section_name].get("lot_id", "").strip()
+        if old == str(new_lot_id):
+            return
+        raw.set(section_name, "lot_id", str(new_lot_id))
+        adc.save_ad_cfg(c)
+        logger.info(f"Автовыдача «{section_name}»: lot_id обновлён {old or '—'} → {new_lot_id}")
+    except Exception as e:
+        logger.debug(f"sync ad lot_id: {e}")
+
+
 def auto_delivery_handler(c: Cardinal, event: NewDealEvent | ItemPaidEvent):
     if not c.autodelivery_enabled:
         return
-    
+
     deal = event.deal
     chat = event.chat
+    if not deal or not chat:
+        return
 
     now = time.time()
     if deal.id in _recent_auto_deliveries and now - _recent_auto_deliveries[deal.id] < 60:
         logger.debug(f"Автовыдача для сделки #{deal.id} уже выполнялась — пропуск")
         return
     _recent_auto_deliveries[deal.id] = now
-    
+
     logger.info(f"Обработка заказа $YELLOW#{deal.id}$RESET")
-    
+
     lot_id = None
-    if hasattr(deal, 'item') and deal.item:
-        if hasattr(deal.item, 'id'):
-            lot_id = str(deal.item.id)
-        elif hasattr(deal.item, 'lot_id'):
-            lot_id = str(deal.item.lot_id)
-    
-    if not lot_id:
-        logger.warning(f"Не удалось определить lot_id для заказа $YELLOW#{deal.id}$RESET")
-        return
-    
-    delivery_config = None
-    for config in c.AD_CFG:
-        if config.get("lot_id") == lot_id:
-            delivery_config = config
-            break
-    
+    item_name = ""
+    if hasattr(deal, "item") and deal.item:
+        lot_id = str(getattr(deal.item, "id", None) or getattr(deal.item, "lot_id", None) or "") or None
+        item_name = getattr(deal.item, "name", None) or ""
+
+    delivery_config = _find_delivery_config(c, lot_id, item_name)
     if not delivery_config:
-        logger.debug(f"Конфигурация автовыдачи для лота $YELLOW{lot_id}$RESET не найдена")
+        logger.debug(f"Конфигурация автовыдачи для лота $YELLOW{lot_id or item_name}$RESET не найдена")
         return
-    
-    logger.info(f"Найдена конфигурация автовыдачи для лота $YELLOW{lot_id}$RESET")
-    
+
+    if delivery_config.get("disable") in ("1", 1, True, "true"):
+        logger.info(f"Автовыдача отключена для лота $YELLOW{delivery_config.get('name') or lot_id}$RESET")
+        return
+
+    cfg_name = delivery_config.get("name") or ""
+    if lot_id and cfg_name and str(delivery_config.get("lot_id") or "") != str(lot_id):
+        _sync_ad_lot_id(c, cfg_name, lot_id)
+        delivery_config["lot_id"] = str(lot_id)
+
+    logger.info(
+        f"Найдена конфигурация автовыдачи для лота $YELLOW{cfg_name or lot_id}$RESET"
+        f"{' (лимитированная)' if delivery_config.get('goods_file') else ''}"
+    )
+
     goods_file = delivery_config.get("goods_file")
     response = delivery_config.get("response", "")
-    
-    if not goods_file:
-        logger.error(f"Не указан файл товаров для лота $YELLOW{lot_id}$RESET")
-        return
-    
-    amount = 1
-    if c.multidelivery_enabled and delivery_config.get("disableMultiDelivery") not in ("1", True):
-        item_name = deal.item.name if hasattr(deal, "item") and deal.item else ""
-        amount = cardinal_tools.parse_delivery_amount_from_name(item_name, 1)
+    products: list[str] = []
+    goods_left = -1
 
-    try:
-        result = cardinal_tools.get_products(goods_file, amount)
-        if result is None:
-            logger.error(f"Файл $YELLOW{goods_file}$RESET пуст или произошла ошибка при чтении!")
+    if goods_file:
+        amount = 1
+        if c.multidelivery_enabled and delivery_config.get("disableMultiDelivery") not in ("1", True):
+            amount = cardinal_tools.parse_delivery_amount_from_name(item_name, 1)
+
+        try:
+            result = cardinal_tools.get_products(goods_file, amount)
+            if result is None:
+                logger.error(f"Файл $YELLOW{goods_file}$RESET пуст или произошла ошибка при чтении!")
+                return
+            products, goods_left = result
+        except Utils.exceptions.NoProductsError:
+            logger.error(f"В файле $YELLOW{goods_file}$RESET нет товаров!")
             return
-        products, goods_left = result
-    except Utils.exceptions.NoProductsError:
-        logger.error(f"В файле $YELLOW{goods_file}$RESET нет товаров!")
-        return
-    except Utils.exceptions.NotEnoughProductsError as e:
-        logger.error(f"В файле $YELLOW{goods_file}$RESET недостаточно товаров: {e}")
-        return
-    except Exception as e:
-        logger.error(f"Произошла ошибка при получении товаров для заказа $YELLOW#{deal.id}$RESET: $YELLOW{e}$RESET")
-        logger.debug("TRACEBACK", exc_info=True)
-        return
-    
+        except Utils.exceptions.NotEnoughProductsError as e:
+            logger.error(f"В файле $YELLOW{goods_file}$RESET недостаточно товаров: {e}")
+            return
+        except Exception as e:
+            logger.error(
+                f"Произошла ошибка при получении товаров для заказа $YELLOW#{deal.id}$RESET: $YELLOW{e}$RESET"
+            )
+            logger.debug("TRACEBACK", exc_info=True)
+            return
+
     delivery_text = cardinal_tools.format_order_text(response, deal)
-    delivery_text = delivery_text.replace("$product", "\n".join(products).replace("\\n", "\n"))
-    
-    buyer_name = deal.user.username if hasattr(deal, 'user') and hasattr(deal.user, 'username') else str(deal.user.id) if hasattr(deal, 'user') and deal.user else "Unknown"
-    result = c.send_message(chat.id, delivery_text, buyer_name)
-    
-    if not result:
+    if goods_file:
+        delivery_text = delivery_text.replace("$product", "\n".join(products).replace("\\n", "\n"))
+    else:
+        delivery_text = delivery_text.replace("$product", "")
+
+    buyer_name = (
+        deal.user.username if hasattr(deal, "user") and deal.user and hasattr(deal.user, "username")
+        else str(deal.user.id) if hasattr(deal, "user") and deal.user else "Unknown"
+    )
+    sent = c.send_message(chat.id, delivery_text, buyer_name)
+
+    if not sent:
         logger.error(f"Не удалось отправить товар для ордера $YELLOW#{deal.id}$RESET.")
-        if products:
+        if goods_file and products:
             cardinal_tools.add_products(goods_file, products, at_zero_position=True)
         if c.telegram:
             from tg_bot.utils import NotificationTypes
             from threading import Thread
             error_text = f"❌ <code>Не удалось отправить товар для ордера {deal.id}.</code>"
-            Thread(target=c.telegram.send_notification, args=(error_text, None, NotificationTypes.delivery),
-                   daemon=True).start()
-    else:
-        logger.info(f"Товар для заказа $YELLOW#{deal.id}$RESET выдан: $CYAN{', '.join(products)}$RESET")
-        if c.telegram:
-            from tg_bot import utils
-            from tg_bot.utils import NotificationTypes
-            from threading import Thread
-            amount = "<b>∞</b>" if goods_left == -1 else f"<code>{goods_left}</code>"
-            text = f"""✅ Успешно выдал товар для ордера <code>{deal.id}</code>.\n
+            Thread(
+                target=c.telegram.send_notification,
+                args=(error_text, None, NotificationTypes.delivery),
+                daemon=True,
+            ).start()
+        return
+
+    given = ", ".join(products) if products else delivery_text[:80]
+    logger.info(f"Товар для заказа $YELLOW#{deal.id}$RESET выдан: $CYAN{given}$RESET")
+
+    try:
+        from PlayerokAPI.enums import ItemDealStatuses
+        time.sleep(0.5)
+        c.account.update_deal(str(deal.id), ItemDealStatuses.SENT)
+        logger.info(f"Сделка $YELLOW#{deal.id}$RESET подтверждена (SENT) после автовыдачи")
+    except Exception as e:
+        logger.warning(f"Не удалось подтвердить сделку #{deal.id} после выдачи: {e}")
+
+    if c.telegram:
+        from tg_bot import utils
+        from tg_bot.utils import NotificationTypes
+        from threading import Thread
+        left = "<b>∞</b>" if goods_left == -1 else f"<code>{goods_left}</code>"
+        text = f"""✅ Успешно выдал товар для ордера <code>{deal.id}</code>.\n
 🛒 <b><i>Товар:</i></b>
 <code>{utils.escape(delivery_text)}</code>\n
-📋 <b><i>Осталось товаров: </i></b>{amount}"""
-            Thread(target=c.telegram.send_notification, args=(text, None, NotificationTypes.delivery),
-                   daemon=True).start()
-        from Utils import playerok_automation
-        playerok_automation.process_auto_disable_for_lot(c, lot_id, delivery_config)
+📋 <b><i>Осталось товаров: </i></b>{left}"""
+        Thread(
+            target=c.telegram.send_notification,
+            args=(text, None, NotificationTypes.delivery),
+            daemon=True,
+        ).start()
+    from Utils import playerok_automation
+    playerok_automation.process_auto_disable_for_lot(c, lot_id or delivery_config.get("lot_id"), delivery_config)
 
 def chat_initialized_handler(c: Cardinal, event: ChatInitializedEvent):
-    pass
+    from Utils import lots_cache
+    started = lots_cache.start_watch_loop(c)
+    if not started:
+        return
 
-def create_deal_keyboard(chat_id: str, username: str, deal_id: str):
+    def _once():
+        time.sleep(6)
+        try:
+            _catchup_auto_restore(c)
+        except Exception as e:
+            logger.debug(f"catchup restore: {e}")
+
+    from threading import Thread
+    Thread(target=_once, daemon=True).start()
+
+
+def _pick_priority_status_id(c: Cardinal, item_id: str, item_price) -> tuple[str, str | None]:
+    status_free_id = "1efbe5bc-99a7-68e5-4534-85dad913b981"
+    if isinstance(c.MAIN_CFG, dict):
+        restore_mode = c.MAIN_CFG.get("Playerok", {}).get("restorePriorityMode", "free")
+    else:
+        restore_mode = c.MAIN_CFG.get("Playerok", "restorePriorityMode", fallback="free")
+
+    status_premium_id = None
+    price_premium = None
+    balance = 0.0
+    try:
+        bal = c.get_balance()
+        balance = float(getattr(bal, "available", 0) or 0) if bal else 0.0
+    except Exception:
+        pass
+    try:
+        price_s = str(item_price if item_price is not None else "0")
+        for ps in c.account.get_item_priority_statuses(item_id, price_s) or []:
+            sp = getattr(ps, "price", 0) or 0
+            if sp > 0 and (price_premium is None or sp < price_premium):
+                price_premium = sp
+                status_premium_id = getattr(ps, "id", None)
+    except Exception as e:
+        logger.debug(f"priority statuses {item_id}: {e}")
+
+    if restore_mode == "premium" and status_premium_id and price_premium is not None and balance >= float(price_premium):
+        return status_premium_id, status_premium_id
+    return status_free_id, status_premium_id
+
+
+def _find_item_for_restore(c: Cardinal, item_id: str):
+    from PlayerokAPI.enums import ItemStatuses
+    from Utils import lots_cache
+
+    try:
+        item = c.account.get_item(id=item_id)
+        if item:
+            lots_cache.upsert(item)
+            return item
+    except Exception as e:
+        logger.debug(f"get_item {item_id}: {e}")
+
+    for statuses in (
+        [ItemStatuses.SOLD],
+        [ItemStatuses.DRAFT, ItemStatuses.EXPIRED],
+        [ItemStatuses.APPROVED, ItemStatuses.PENDING_APPROVAL, ItemStatuses.PENDING_MODERATION],
+    ):
+        cursor = None
+        for _ in range(8):
+            try:
+                page = c.account.get_my_items(statuses=statuses, count=24, after_cursor=cursor)
+            except Exception as e:
+                logger.debug(f"get_my_items restore scan: {e}")
+                break
+            for it in getattr(page, "items", None) or []:
+                if str(getattr(it, "id", "")) == str(item_id):
+                    lots_cache.upsert(it)
+                    try:
+                        full = c.account.get_item(id=item_id)
+                        if full:
+                            lots_cache.upsert(full)
+                            return full
+                    except Exception:
+                        return it
+                    return it
+            info = getattr(page, "page_info", None)
+            if not info or not getattr(info, "has_next_page", False):
+                break
+            cursor = getattr(info, "end_cursor", None)
+            if not cursor:
+                break
+
+    return lots_cache.as_item(item_id)
+
+
+def _restore_item_by_id(
+    c: Cardinal,
+    item_id: str,
+    *,
+    retries: int = 5,
+    delay: float = 1.2,
+    item_name: str | None = None,
+    deal_item=None,
+) -> bool:
+    if not c.autorestore_enabled or not item_id:
+        return False
+
+    from Utils import lots_cache
+    from Utils.item_restore import restore_after_sale
+
+    item_id = str(item_id)
+    snap = lots_cache.get(item_id)
+    name = (item_name or (snap or {}).get("name") or getattr(deal_item, "name", None) or item_id)
+
+    probe = deal_item or lots_cache.as_item(item_id)
+    skip = _restore_skip_reason(c, probe) if probe else None
+    if skip:
+        logger.info(f"Авто-восстановление пропуск ({item_id}): {skip}")
+        _dequeue_pending_restore(item_id)
+        return False
+
+    ok = restore_after_sale(
+        c,
+        item_id=item_id,
+        item_name=str(name),
+        deal_item=deal_item,
+    )
+    if ok:
+        _dequeue_pending_restore(item_id)
+    return ok
+
+
+def _catchup_auto_restore(c: Cardinal) -> None:
+    if not c.autorestore_enabled:
+        return
+    _save_pending_restore_items([])
+
+    time.sleep(2)
+    pending: list[tuple[str, str, Any]] = []
+    seen: set[str] = set()
+    try:
+        from PlayerokAPI.enums import ItemDealStatuses, ItemDealDirections
+        from datetime import datetime, timezone, timedelta
+
+        deals_page = c.account.get_deals(
+            statuses=[ItemDealStatuses.PAID, ItemDealStatuses.SENT, ItemDealStatuses.PENDING],
+            direction=ItemDealDirections.OUT,
+            count=24,
+        )
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+        for deal in getattr(deals_page, "deals", None) or []:
+            created = getattr(deal, "created_at", None)
+            if created:
+                try:
+                    raw = str(created).replace("Z", "+00:00")
+                    dt = datetime.fromisoformat(raw)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt < cutoff:
+                        continue
+                except Exception:
+                    pass
+            item = getattr(deal, "item", None)
+            iid = str(getattr(item, "id", "") or "")
+            if iid and iid not in seen:
+                seen.add(iid)
+                pending.append((iid, getattr(item, "name", None) or iid, item))
+    except Exception as e:
+        logger.debug(f"Catchup get_deals: {e}")
+
+    if not pending:
+        return
+    logger.info(f"🔄 Catchup: свежие продажи за 15 мин — {len(pending)} лот(ов)")
+    for item_id, item_name, deal_item in pending:
+        try:
+            _restore_item_by_id(c, item_id, item_name=item_name, deal_item=deal_item)
+        except Exception as e:
+            logger.warning(f"Catchup restore {item_id}: {e}")
+        time.sleep(3.0)
+
+
+def create_deal_keyboard(chat_id: str, username: str, deal_id: str, deal=None):
     from tg_bot import keyboards as kb
-    return kb.new_order(deal_id, username, chat_id)
+    status = getattr(deal, "status", None) if deal is not None else None
+    return kb.new_order(deal_id, username, chat_id, deal_status=status)
+
+_recent_order_notices: dict[str, float] = {}
+
 
 def send_new_deal_notification(c: Cardinal, event: NewDealEvent):
     if not c.telegram:
@@ -361,6 +610,18 @@ def send_new_deal_notification(c: Cardinal, event: NewDealEvent):
     
     deal = event.deal
     chat = event.chat
+    if not deal or not getattr(deal, "id", None):
+        return
+
+    now = time.time()
+    last = _recent_order_notices.get(deal.id)
+    if last is not None and now - last < 120:
+        return
+    _recent_order_notices[deal.id] = now
+    if len(_recent_order_notices) > 500:
+        cutoff = now - 3600
+        for k in [k for k, t in _recent_order_notices.items() if t < cutoff]:
+            _recent_order_notices.pop(k, None)
     
     buyer_username = _deal_buyer_username(deal)
     
@@ -373,22 +634,25 @@ def send_new_deal_notification(c: Cardinal, event: NewDealEvent):
         subcategory_name = deal.item.category.name if hasattr(deal.item.category, 'name') else ""
     
     price_rub = _deal_price_rub(deal)
-    
-    delivery_config = None
-    lot_id = str(deal.item.id) if hasattr(deal, 'item') and deal.item and hasattr(deal.item, 'id') else None
-    if lot_id:
-        for config in c.AD_CFG:
-            if config.get("lot_id") == lot_id:
-                delivery_config = config
-                break
-    
+
+    lot_id = None
+    if hasattr(deal, "item") and deal.item and getattr(deal.item, "id", None):
+        lot_id = str(deal.item.id)
+
+    delivery_config = _find_delivery_config(
+        c,
+        lot_id,
+        item_name if item_name != "Unknown" else None,
+    )
+
     if not delivery_config:
         delivery_info = _("ntfc_new_order_not_in_cfg")
+    elif delivery_config.get("disable") in ("1", 1, True, "true"):
+        delivery_info = _("ntfc_new_order_ad_disabled_for_lot")
+    elif not c.autodelivery_enabled:
+        delivery_info = _("ntfc_new_order_ad_disabled")
     else:
-        if not c.autodelivery_enabled:
-            delivery_info = _("ntfc_new_order_ad_disabled")
-        else:
-            delivery_info = _("ntfc_new_order_will_be_delivered")
+        delivery_info = _("ntfc_new_order_will_be_delivered")
     
     from tg_bot import utils
     description = f"{utils.escape(item_name)}"
@@ -397,7 +661,9 @@ def send_new_deal_notification(c: Cardinal, event: NewDealEvent):
     
     text = _("ntfc_new_order", description, buyer_username, f"{price_rub:.2f} RUB", deal.id, delivery_info)
     
-    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id, deal)
+
+    logger.info(_("log_new_order", item_name, f"{price_rub:.2f}", buyer_username))
     
     from tg_bot.utils import NotificationTypes
     from threading import Thread
@@ -413,7 +679,8 @@ def send_item_sent_notification(c: Cardinal, event: ItemSentEvent):
     buyer_username = _deal_buyer_username(deal)
     item_name = _deal_item_name(deal)
     text = _("ntfc_item_sent", buyer_username, item_name, deal.id)
-    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id, deal)
+    logger.info(_("log_order_sent", deal.id))
     from tg_bot.utils import NotificationTypes
     from threading import Thread
     Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
@@ -427,7 +694,8 @@ def send_deal_confirmed_notification(c: Cardinal, event: DealConfirmedEvent):
     buyer_username = _deal_buyer_username(deal)
     item_name = _deal_item_name(deal)
     text = _("ntfc_deal_confirmed", buyer_username, item_name, deal.id)
-    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id, deal)
+    logger.info(_("log_order_confirmed", deal.id))
     from tg_bot.utils import NotificationTypes
     from threading import Thread
     Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
@@ -441,21 +709,36 @@ def send_deal_rolled_back_notification(c: Cardinal, event: DealRolledBackEvent):
     buyer_username = _deal_buyer_username(deal)
     item_name = _deal_item_name(deal)
     text = _("ntfc_deal_rolled_back", buyer_username, item_name, deal.id)
-    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id, deal)
     from tg_bot.utils import NotificationTypes
     from threading import Thread
     Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
            daemon=True).start()
 
+_recent_review_notices: dict[str, float] = {}
+
+
 def send_new_review_notification(c: Cardinal, event: NewReviewEvent):
     if c.telegram is None:
         return
-    
+
     deal = event.deal
     chat = event.chat
-    
+    if not deal or not getattr(deal, "id", None):
+        return
+
+    now = time.time()
+    last = _recent_review_notices.get(deal.id)
+    if last is not None and now - last < 600:
+        return
+    _recent_review_notices[deal.id] = now
+    if len(_recent_review_notices) > 500:
+        cutoff = now - 3600
+        for k in [k for k, t in _recent_review_notices.items() if t < cutoff]:
+            _recent_review_notices.pop(k, None)
+
     buyer_username = deal.user.username if hasattr(deal, 'user') and hasattr(deal.user, 'username') else str(deal.user.id) if hasattr(deal, 'user') and deal.user else "Unknown"
-    
+
     review_text = ""
     review_rating = 0
     if hasattr(deal, 'review') and deal.review:
@@ -463,17 +746,17 @@ def send_new_review_notification(c: Cardinal, event: NewReviewEvent):
             review_text = deal.review.text
         if hasattr(deal.review, 'rating'):
             review_rating = deal.review.rating
-    
+
     stars = "⭐" * review_rating if review_rating else ""
-    
+
     from tg_bot import utils
 
-    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id) if chat else "", buyer_username, deal.id, deal)
 
     from tg_bot.utils import NotificationTypes
     from threading import Thread
     Thread(target=c.telegram.send_notification,
-           args=(_("ntfc_new_review").format(stars, deal.id, utils.escape(review_text)),
+           args=(_("ntfc_new_review").format(stars, deal.id, utils.escape(review_text or "")),
                  keyboard, NotificationTypes.review),
            daemon=True).start()
 
@@ -492,7 +775,7 @@ def send_deal_has_problem_notification(c: Cardinal, event: DealHasProblemEvent):
     notification_text += f"📦 <b>Товар:</b> {item_name}\n"
     notification_text += f"🆔 <b>ID сделки:</b> <code>{deal.id}</code>"
     
-    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id, deal)
     
     from tg_bot.utils import NotificationTypes
     from threading import Thread
@@ -514,7 +797,7 @@ def send_deal_problem_resolved_notification(c: Cardinal, event: DealProblemResol
     notification_text += f"📦 <b>Товар:</b> {item_name}\n"
     notification_text += f"🆔 <b>ID сделки:</b> <code>{deal.id}</code>"
     
-    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id, deal)
     
     from tg_bot.utils import NotificationTypes
     from threading import Thread
@@ -542,26 +825,34 @@ def send_deal_status_changed_notification(c: Cardinal, event: DealStatusChangedE
     buyer_username = _deal_buyer_username(deal)
     status_text = _deal_status_label(getattr(deal, "status", None))
     text = _("ntfc_deal_status_changed", deal.id, status_text, buyer_username)
-    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id)
+    keyboard = create_deal_keyboard(str(chat.id), buyer_username, deal.id, deal)
     from tg_bot.utils import NotificationTypes
     from threading import Thread
     Thread(target=c.telegram.send_notification, args=(text, keyboard, NotificationTypes.order_confirmed),
            daemon=True).start()
 
-def _is_stars_category_item(item) -> bool:
-    if not item:
-        return False
+def _plugin_by_filename(c: Cardinal, filename: str):
+    needle = filename.lower().replace("\\", "/")
+    for plugin in (getattr(c, "plugins", None) or {}).values():
+        path = (getattr(plugin, "path", None) or "").replace("\\", "/").lower()
+        if path.endswith(needle) or path.endswith("/" + needle):
+            return plugin
+    return None
+
+
+def _is_telegram_stars_category(item) -> bool:
     cat = getattr(item, "category", None)
-    if cat:
-        slug = (getattr(cat, "slug", None) or "").lower()
-        name = (getattr(cat, "name", None) or "").lower()
-        if slug == "stars" or "звезд" in name or name == "stars":
-            return True
-    game = getattr(item, "game", None)
-    if game and (getattr(game, "slug", None) or "").lower() == "telegram":
-        if cat and (getattr(cat, "slug", None) or "").lower() == "stars":
-            return True
-    return False
+    if not cat:
+        return False
+    slug = (getattr(cat, "slug", None) or "").strip().lower()
+    if slug == "stars":
+        return True
+    name = (getattr(cat, "name", None) or "").strip().lower().replace("ё", "е")
+    return name in {"stars", "звезды", "telegram stars", "tg stars"}
+
+
+def _is_stars_category_item(item) -> bool:
+    return _is_telegram_stars_category(item)
 
 
 def _is_steam_rent_managed_item(item) -> bool:
@@ -583,608 +874,157 @@ def _is_steam_rent_managed_item(item) -> bool:
     return False
 
 
-def auto_restore_handler(c: Cardinal, event: ItemPaidEvent | ItemSentEvent):
+def _ad_restore_disabled(c: Cardinal, item_id: str) -> bool:
+    for cfg in getattr(c, "AD_CFG", None) or []:
+        if str(cfg.get("lot_id") or "") == str(item_id):
+            return cfg.get("disableAutoRestore") in ("1", 1, True, "true")
+    return False
+
+
+def _restore_skip_reason(c: Cardinal, item) -> str | None:
+    if not item:
+        return "нет товара"
+    item_id = str(getattr(item, "id", "") or "")
+
+    if item_id and _ad_restore_disabled(c, item_id):
+        return f"disableAutoRestore в автовыдаче ({item_id})"
+
+    try:
+        from Utils.auto_restore_exclusions import exclusion_reason_for_item
+        reason = exclusion_reason_for_item(item)
+        if reason:
+            return reason
+    except Exception as e:
+        logger.debug(f"exclusions check failed: {e}")
+
+    if _is_steam_rent_managed_item(item):
+        steam = _plugin_by_filename(c, "auto_steam_rent.py")
+        if steam is not None and getattr(steam, "enabled", False):
+            return "лот привязан к auto_steam_rent"
+
+    if _is_telegram_stars_category(item):
+        stars = _plugin_by_filename(c, "fast_stars.py")
+        if stars is not None and getattr(stars, "enabled", False):
+            return "категория Stars + включён fast_stars"
+
+    return None
+
+
+_PENDING_RESTORE_PATH = os.path.join("storage", "cache", "pending_restore_items.json")
+_recent_auto_restores: dict[str, float] = {}
+
+
+def _load_pending_restore_items() -> list[str]:
+    try:
+        if not os.path.exists(_PENDING_RESTORE_PATH):
+            return []
+        with open(_PENDING_RESTORE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return [str(x) for x in data if x]
+        if isinstance(data, dict):
+            return [str(x) for x in data.get("items", []) if x]
+    except Exception:
+        pass
+    return []
+
+
+def _save_pending_restore_items(items: list[str]) -> None:
+    try:
+        os.makedirs(os.path.dirname(_PENDING_RESTORE_PATH), exist_ok=True)
+        seen = set()
+        uniq = []
+        for i in items:
+            if i not in seen:
+                seen.add(i)
+                uniq.append(i)
+        with open(_PENDING_RESTORE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"items": uniq}, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"Не удалось сохранить очередь восстановления: {e}")
+
+
+def _queue_pending_restore(item_id: str) -> None:
+    items = _load_pending_restore_items()
+    if item_id not in items:
+        items.append(item_id)
+        _save_pending_restore_items(items)
+
+
+def _dequeue_pending_restore(item_id: str) -> None:
+    items = [i for i in _load_pending_restore_items() if i != item_id]
+    _save_pending_restore_items(items)
+
+
+def _item_can_publish(item_details) -> bool:
+    from PlayerokAPI.enums import ItemStatuses
+    st = getattr(item_details, "status", None)
+    if st == ItemStatuses.APPROVED:
+        return False
+    may_pub = getattr(item_details, "may_be_published", None)
+    if may_pub is True:
+        return True
+    if getattr(item_details, "is_editable", False):
+        return True
+    if st in (ItemStatuses.DRAFT, ItemStatuses.SOLD, ItemStatuses.EXPIRED, ItemStatuses.PENDING_APPROVAL):
+        return True
+    return may_pub is not False
+
+
+def auto_restore_handler(c: Cardinal, event: NewDealEvent | ItemPaidEvent | ItemSentEvent | DealRolledBackEvent):
     if not c.autorestore_enabled:
+        logger.info("Авто-восстановление пропуск: autoRestore выключен в конфиге")
         return
     
     deal = event.deal
-    if not deal or not deal.item:
+    if not deal or not getattr(deal, "item", None) or not getattr(deal.item, "id", None):
+        logger.info("Авто-восстановление пропуск: в событии нет deal.item.id")
         return
 
-    if _is_stars_category_item(deal.item):
-        logger.debug(
-            "Пропуск авто-восстановления POC для Stars-лота %s — восстановление выполняет плагин fast_stars.",
-            deal.item.name,
-        )
+    deal_id = str(deal.id)
+    item_id = str(deal.item.id)
+    item_name = getattr(deal.item, "name", None) or item_id
+
+    now = time.time()
+    last_deal = _recent_auto_restores.get(f"deal:{deal_id}")
+    if last_deal is not None and now - last_deal < 120:
+        return
+    _recent_auto_restores[f"deal:{deal_id}"] = now
+
+    from Utils import lots_cache
+    lots_cache.upsert(deal.item)
+
+    check_item = deal.item
+    if not getattr(check_item, "category", None):
+        cached = lots_cache.as_item(item_id)
+        if cached and getattr(cached, "category", None):
+            check_item = cached
+
+    skip = _restore_skip_reason(c, check_item)
+    if skip:
+        logger.info(f"Авто-восстановление пропуск «{item_name}»: {skip}")
         return
 
-    if _is_steam_rent_managed_item(deal.item):
-        logger.debug(
-            "Пропуск авто-восстановления POC для Steam Rent лота %s — восстановление выполняет плагин auto_steam_rent.",
-            deal.item.name,
-        )
+    last = _recent_auto_restores.get(item_id)
+    if last is not None and now - last < 30:
         return
-    
-    from PlayerokAPI import enums
-    if hasattr(deal, 'status') and deal.status != enums.ItemDealStatuses.PAID:
-        return
-    
-    item_id = deal.item.id
-    item_name = deal.item.name
-    
+    _recent_auto_restores[item_id] = now
+    if len(_recent_auto_restores) > 800:
+        cutoff = now - 600
+        for k in [k for k, t in _recent_auto_restores.items() if t < cutoff]:
+            _recent_auto_restores.pop(k, None)
+
+    _queue_pending_restore(item_id)
     logger.info(f"🚀 Запуск авто-восстановления для товара {item_name} (ID: {item_id})")
-    
-    try:
-        item_details = c.account.get_item(id=item_id)
-        if not item_details:
-            logger.error(f"❌ Не удалось получить детали товара {item_name} (ID: {item_id})")
-            return
-        
-        if isinstance(c.MAIN_CFG, dict):
-            restore_mode = c.MAIN_CFG.get("Playerok", {}).get("restorePriorityMode", "premium")
-        else:
-            restore_mode = c.MAIN_CFG.get("Playerok", "restorePriorityMode", fallback="premium")
-        
-        balance = None
-        for attempt in range(3):
-            try:
-                balance_obj = c.get_balance()
-                balance = balance_obj.available if balance_obj and balance_obj.available else 0
-                break
-            except Exception as e:
-                if attempt == 2:
-                    balance = None
-                    logger.error(f"❌ Ошибка получения баланса: {e}")
-                else:
-                    time.sleep(1)
-        
-        item_price = str(item_details.price) if item_details.price else "0"
-        price_premium = None
-        status_premium_id = None
-        status_free_id = "1efbe5bc-99a7-68e5-4534-85dad913b981"
-        
-        for attempt in range(3):
-            try:
-                priority_statuses = c.account.get_item_priority_statuses(item_id, item_price)
-                if priority_statuses:
-                    for status in priority_statuses:
-                        status_price = status.price if hasattr(status, 'price') else 0
-                        if status_price > 0:
-                            if price_premium is None or status_price < price_premium:
-                                price_premium = status_price
-                                status_premium_id = status.id if hasattr(status, 'id') else None
-                break
-            except Exception as e:
-                if attempt == 2:
-                    price_premium = None
-                    logger.error(f"❌ Ошибка получения цены премиума: {e}")
-                else:
-                    time.sleep(1)
-        
-        if balance is None or price_premium is None:
-            skip_balance_check = True
-        else:
-            skip_balance_check = False
-        
-        if hasattr(item_details, 'data_fields') and item_details.data_fields:
-            has_hidden_fields = any(
-                hasattr(field, 'hidden') and field.hidden 
-                for field in item_details.data_fields
-            )
-            if has_hidden_fields:
-                return
-        
-        from PlayerokAPI.types import MyItem
-        is_my_item = isinstance(item_details, MyItem)
-        
-        if is_my_item and item_details.is_editable:
-            if hasattr(item_details, 'priority') and item_details.priority:
-                priority_name = None
-                if hasattr(item_details.priority, 'name'):
-                    priority_name = item_details.priority.name
-                elif isinstance(item_details.priority, str):
-                    priority_name = item_details.priority
-                
-                if priority_name == 'PREMIUM':
-                    if restore_mode == "free":
-                        status = status_free_id
-                    elif restore_mode == "premium":
-                        if not skip_balance_check and price_premium and float(price_premium) <= float(balance):
-                            status = status_premium_id if status_premium_id else status_free_id
-                        else:
-                            status = status_free_id
-                    else:
-                        status = status_premium_id if status_premium_id else status_free_id
-                        if not skip_balance_check and price_premium and float(price_premium) > float(balance):
-                            status = status_free_id
-                else:
-                    status = status_free_id
-            else:
-                status = status_free_id
-            
-            for attempt in range(3):
-                try:
-                    c.account.publish_item(item_id, status)
-                    status_text = "премиум" if status == status_premium_id else "бесплатно"
-                    
-                    if c.telegram:
-                        try:
-                            from tg_bot.utils import NotificationTypes
-                            from threading import Thread
-                            text = f"🔄 <b>Авто-восстановление товара</b>\n\n✅ Товар '{item_name}' перевыставлен ({status_text})\n🆔 ID: {item_id}"
-                            Thread(target=c.telegram.send_notification, args=(text, None, NotificationTypes.relist),
-                                   daemon=True).start()
-                        except Exception as notify_ex:
-                            logger.error(f"❌ Ошибка отправки уведомления: {notify_ex}")
-                    
-                    return
-                except Exception as e:
-                    logger.error(f"❌ Ошибка публикации (попытка {attempt+1}): {e}")
-                    if attempt == 2:
-                        raise
-                    time.sleep(1)
-        
-        if not item_details.is_editable:
-            if restore_mode == "premium" and (balance is None or price_premium is None or status_premium_id is None):
-                for attempt in range(3):
-                    try:
-                        balance_obj = c.get_balance()
-                        balance = balance_obj.available if balance_obj and balance_obj.available else 0
-                        break
-                    except Exception as e:
-                        if attempt == 2:
-                            balance = None
-                            logger.error(f"❌ Ошибка получения баланса: {e}")
-                        else:
-                            time.sleep(1)
-                
-                item_price = str(item_details.price) if item_details.price else "0"
-                for attempt in range(3):
-                    try:
-                        priority_statuses = c.account.get_item_priority_statuses(item_id, item_price)
-                        if priority_statuses:
-                            for status in priority_statuses:
-                                status_price = status.price if hasattr(status, 'price') else 0
-                                if status_price > 0:
-                                    if price_premium is None or status_price < price_premium:
-                                        price_premium = status_price
-                                        status_premium_id = status.id if hasattr(status, 'id') else None
-                        break
-                    except Exception as e:
-                        if attempt == 2:
-                            price_premium = None
-                            logger.error(f"❌ Ошибка получения цены премиума: {e}")
-                        else:
-                            time.sleep(1)
-            
-            try:
-                category_id = item_details.category.id if item_details.category else None
-                obtaining_type_id = item_details.obtaining_type.id if item_details.obtaining_type else None
-                
-                if not obtaining_type_id or not category_id:
-                    logger.warning(f"Не удалось получить необходимые данные для товара {item_name}")
-                    return
-                
-                item_data = {
-                    "category": {"id": category_id},
-                    "name": item_name,
-                    "price": item_details.price,
-                    "description": item_details.description if hasattr(item_details, 'description') and item_details.description else item_name,
-                    "attributes": item_details.attributes if hasattr(item_details, 'attributes') and item_details.attributes else {},
-                    "dataFields": [
-                        {
-                            "fieldId": field.id,
-                            "value": field.value
-                        }
-                        for field in (item_details.data_fields if hasattr(item_details, 'data_fields') and item_details.data_fields else [])
-                        if hasattr(field, 'type') and hasattr(field, 'id') and hasattr(field, 'value')
-                    ],
-                    "obtainingType": {"id": obtaining_type_id},
-                    "attachments": []
-                }
-                
-                if hasattr(item_details, 'attachments') and item_details.attachments:
-                    for att in item_details.attachments:
-                        if hasattr(att, 'url') and att.url:
-                            item_data["attachments"].append({"url": att.url})
-                
-                if not item_data["attachments"]:
-                    if c.telegram:
-                        from tg_bot.utils import NotificationTypes
-                        from threading import Thread
-                        text = f"⚠️ <b>Авто-восстановление пропущено</b>\n\nТовар '{item_name}' не имеет изображений\n🆔 ID: {item_id}\n💡 Необходимо создать товар вручную на playerok.com"
-                        Thread(target=c.telegram.send_notification, args=(text, None, NotificationTypes.relist),
-                               daemon=True).start()
-                    return
-                
-                temp_image_path = None
-                try:
-                    image_url = item_data["attachments"][0]["url"]
-                    
-                    response = requests.get(image_url, stream=True, timeout=30)
-                    response.raise_for_status()
-                    
-                    temp_dir = tempfile.gettempdir()
-                    temp_image_path = os.path.join(temp_dir, f"autorestore_item_{item_id}_{int(time.time())}.jpg")
-                    
-                    with open(temp_image_path, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=1024):
-                            if chunk:
-                                f.write(chunk)
-                    
-                except Exception as download_ex:
-                    logger.error(f"❌ Ошибка скачивания изображения для товара {item_name}: {download_ex}")
-                    if temp_image_path and os.path.exists(temp_image_path):
-                        try:
-                            os.remove(temp_image_path)
-                        except:
-                            pass
-                    if c.telegram:
-                        from tg_bot.utils import NotificationTypes
-                        from threading import Thread
-                        error_msg = str(download_ex)[:200]
-                        text = f"❌ <b>Ошибка авто-восстановления</b>\n\nНе удалось скачать изображение для товара '{item_name}'\n🆔 ID: {item_id}\n⚠️ Ошибка: {error_msg}"
-                        Thread(target=c.telegram.send_notification, args=(text, None, NotificationTypes.relist),
-                               daemon=True).start()
-                    return
-                
-                full_query = """mutation createItem($input: CreateItemInput!, $attachments: [Upload!]!) {
-  createItem(input: $input, attachments: $attachments) {
-    ...RegularItem
-    __typename
-  }
-}
 
-fragment RegularItem on Item {
-  ...RegularMyItem
-  ...RegularForeignItem
-  __typename
-}
+    from threading import Thread
+    Thread(
+        target=_restore_item_by_id,
+        args=(c, item_id),
+        kwargs={"item_name": item_name, "deal_item": deal.item},
+        daemon=True,
+    ).start()
 
-fragment RegularMyItem on MyItem {
-  ...ItemFields
-  prevPrice
-  priority
-  sequence
-  priorityPrice
-  statusExpirationDate
-  comment
-  viewsCounter
-  statusDescription
-  editable
-  statusPayment {
-    ...StatusPaymentTransaction
-    __typename
-  }
-  moderator {
-    id
-    username
-    __typename
-  }
-  approvalDate
-  deletedAt
-  createdAt
-  updatedAt
-  mayBePublished
-  prevFeeMultiplier
-  sellerNotifiedAboutFeeChange
-  __typename
-}
-
-fragment ItemFields on Item {
-  id
-  slug
-  name
-  description
-  rawPrice
-  price
-  attributes
-  status
-  priorityPosition
-  sellerType
-  feeMultiplier
-  user {
-    ...ItemUser
-    __typename
-  }
-  buyer {
-    ...ItemUser
-    __typename
-  }
-  attachments {
-    ...PartialFile
-    __typename
-  }
-  category {
-    ...RegularGameCategory
-    __typename
-  }
-  game {
-    ...RegularGameProfile
-    __typename
-  }
-  comment
-  dataFields {
-    ...GameCategoryDataFieldWithValue
-    __typename
-  }
-  obtainingType {
-    ...GameCategoryObtainingType
-    __typename
-  }
-  __typename
-}
-
-fragment ItemUser on UserFragment {
-  ...UserEdgeNode
-  __typename
-}
-
-fragment UserEdgeNode on UserFragment {
-  ...RegularUserFragment
-  __typename
-}
-
-fragment RegularUserFragment on UserFragment {
-  id
-  username
-  role
-  avatarURL
-  isOnline
-  isBlocked
-  rating
-  testimonialCounter
-  createdAt
-  supportChatId
-  systemChatId
-  __typename
-}
-
-fragment PartialFile on File {
-  id
-  url
-  __typename
-}
-
-fragment RegularGameCategory on GameCategory {
-  id
-  slug
-  name
-  categoryId
-  gameId
-  obtaining
-  options {
-    ...RegularGameCategoryOption
-    __typename
-  }
-  props {
-    ...GameCategoryProps
-    __typename
-  }
-  noCommentFromBuyer
-  instructionForBuyer
-  instructionForSeller
-  useCustomObtaining
-  autoConfirmPeriod
-  autoModerationMode
-  agreements {
-    ...RegularGameCategoryAgreement
-    __typename
-  }
-  feeMultiplier
-  __typename
-}
-
-fragment RegularGameCategoryOption on GameCategoryOption {
-  id
-  group
-  label
-  type
-  field
-  value
-  valueRangeLimit {
-    min
-    max
-    __typename
-  }
-  __typename
-}
-
-fragment GameCategoryProps on GameCategoryPropsObjectType {
-  minTestimonials
-  minTestimonialsForSeller
-  __typename
-}
-
-fragment RegularGameCategoryAgreement on GameCategoryAgreement {
-  description
-  gameCategoryId
-  gameCategoryObtainingTypeId
-  iconType
-  id
-  sequence
-  __typename
-}
-
-fragment RegularGameProfile on GameProfile {
-  id
-  name
-  type
-  slug
-  logo {
-    ...PartialFile
-    __typename
-  }
-  __typename
-}
-
-fragment GameCategoryDataFieldWithValue on GameCategoryDataFieldWithValue {
-  id
-  label
-  type
-  inputType
-  copyable
-  hidden
-  required
-  value
-  __typename
-}
-
-fragment GameCategoryObtainingType on GameCategoryObtainingType {
-  id
-  name
-  description
-  gameCategoryId
-  noCommentFromBuyer
-  instructionForBuyer
-  instructionForSeller
-  sequence
-  feeMultiplier
-  agreements {
-    ...MinimalGameCategoryAgreement
-    __typename
-  }
-  props {
-    minTestimonialsForSeller
-    __typename
-  }
-  __typename
-}
-
-fragment MinimalGameCategoryAgreement on GameCategoryAgreement {
-  description
-  iconType
-  id
-  sequence
-  __typename
-}
-
-fragment StatusPaymentTransaction on Transaction {
-  id
-  operation
-  direction
-  providerId
-  status
-  statusDescription
-  statusExpirationDate
-  value
-  props {
-    paymentURL
-    __typename
-  }
-  __typename
-}
-
-fragment RegularForeignItem on ForeignItem {
-  ...ItemFields
-  __typename}"""
-                
-                input_data = {
-                    "gameCategoryId": category_id,
-                    "name": item_data["name"],
-                    "price": int(item_data["price"]),
-                    "description": item_data["description"],
-                    "attributes": item_data["attributes"],
-                    "dataFields": item_data["dataFields"],
-                    "obtainingTypeId": obtaining_type_id
-                }
-                
-                operations = {
-                    "operationName": "createItem",
-                    "query": full_query,
-                    "variables": {
-                        "input": input_data,
-                        "attachments": [None]
-                    }
-                }
-                
-                map_field = {
-                    "1": ["variables.attachments.0"]
-                }
-                
-                payload = {
-                    "operations": json.dumps(operations, ensure_ascii=False),
-                    "map": json.dumps(map_field, ensure_ascii=False)
-                }
-                
-                files = {
-                    "1": open(temp_image_path, "rb")
-                }
-                
-                new_item_id = None
-                try:
-                    headers = {"accept": "*/*"}
-                    response = c.account.request("post", f"{c.account.base_url}/graphql", headers, payload, files)
-                    
-                    result = response.json()
-                    if "errors" in result:
-                        raise Exception(f"GraphQL ошибка: {result['errors']}")
-                    
-                    if "data" not in result or "createItem" not in result["data"]:
-                        raise Exception(f"Неожиданный ответ от API: {result}")
-                    
-                    new_item_data = result["data"]["createItem"]
-                    new_item_id = new_item_data["id"]
-                    
-                    if restore_mode == "free":
-                        status = status_free_id
-                    elif restore_mode == "premium":
-                        if balance is not None and price_premium is not None and status_premium_id and float(price_premium) <= float(balance):
-                            status = status_premium_id
-                        else:
-                            status = status_free_id
-                    else:
-                        status = status_free_id
-                    
-                    for attempt in range(3):
-                        try:
-                            c.account.publish_item(new_item_id, status)
-                            status_text = "премиум" if status == status_premium_id else "бесплатно"
-                            
-                            if c.telegram:
-                                try:
-                                    from tg_bot.utils import NotificationTypes
-                                    from threading import Thread
-                                    text = f"🔄 <b>Авто-восстановление товара</b>\n\n✅ Создан и опубликован новый товар '{item_name}' ({status_text})\n🆔 Старый ID: {item_id}\n🆔 Новый ID: {new_item_id}"
-                                    Thread(target=c.telegram.send_notification, args=(text, None, NotificationTypes.relist),
-                                           daemon=True).start()
-                                except Exception as notify_ex:
-                                    logger.error(f"❌ Ошибка отправки уведомления: {notify_ex}")
-                            
-                            break
-                        except Exception as e:
-                            logger.error(f"❌ Ошибка публикации нового товара (попытка {attempt+1}): {e}")
-                            if attempt == 2:
-                                raise
-                            time.sleep(1)
-                finally:
-                    if "1" in files and not files["1"].closed:
-                        files["1"].close()
-                    
-                    try:
-                        os.remove(temp_image_path)
-                    except:
-                        pass
-                        
-            except Exception as create_ex:
-                logger.error(f"❌ Ошибка при создании нового товара для {item_name}: {create_ex}")
-                logger.debug("TRACEBACK", exc_info=True)
-                if temp_image_path and os.path.exists(temp_image_path):
-                    try:
-                        os.remove(temp_image_path)
-                    except:
-                        pass
-                if c.telegram:
-                    from tg_bot.utils import NotificationTypes
-                    from threading import Thread
-                    error_msg = str(create_ex)[:200]
-                    text = f"❌ <b>Ошибка авто-восстановления</b>\n\nНе удалось создать новый товар '{item_name}'\n🆔 ID: {item_id}\n⚠️ Ошибка: {error_msg}"
-                    Thread(target=c.telegram.send_notification, args=(text, None, NotificationTypes.relist),
-                           daemon=True).start()
-        
-    except Exception as ex:
-        logger.error(f"❌ Общая ошибка при авто-перевыставлении товара: {ex}")
-        logger.debug("TRACEBACK", exc_info=True)
 
 def send_bot_started_notification_handler(c: Cardinal, *args):
     if c.telegram is None:
@@ -1235,6 +1075,7 @@ def register_handlers(c: Cardinal):
     c.new_deal_handlers.append(enrich_deal_handler)
     c.new_deal_handlers.append(send_new_deal_notification)
     c.new_deal_handlers.append(new_deal_welcome_handler)
+    c.new_deal_handlers.append(auto_restore_handler)
     c.new_deal_handlers.append(auto_delivery_handler)
 
     from Utils import playerok_automation
@@ -1247,6 +1088,7 @@ def register_handlers(c: Cardinal):
     c.deal_confirmed_handlers.append(deal_confirmed_reply_handler)
     c.deal_confirmed_handlers.append(send_deal_confirmed_notification)
     c.deal_rolled_back_handlers.append(send_deal_rolled_back_notification)
+    c.deal_rolled_back_handlers.append(auto_restore_handler)
     c.new_review_handlers.append(review_reply_handler)
     c.new_review_handlers.append(send_new_review_notification)
     c.deal_has_problem_handlers.append(send_deal_has_problem_notification)

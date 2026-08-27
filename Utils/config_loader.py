@@ -141,6 +141,10 @@ def load_main_config(config_path: str):
     return result
 
 def load_auto_response_config(config_path: str):
+    """
+    Секция = команда или набор через | (например [!help] или [!help|!seller]).
+    Обязателен только response. telegramNotification / notificationText — опционально.
+    """
     result = {}
     try:
         config = create_config_obj(config_path)
@@ -150,22 +154,36 @@ def load_auto_response_config(config_path: str):
         raise
 
     for section_name in config.sections():
-        # Пропускаем секции, начинающиеся с ! (комментарии/документация)
-        if section_name.startswith("!"):
+        # Документация: [#! ...] — не команда
+        if section_name.lstrip().startswith("#!"):
             continue
         section = config[section_name]
         try:
-            command = check_param("command", section)
             response = check_param("response", section)
-            result[section_name] = {"command": command, "response": response}
         except (ParamNotFoundError, EmptyValueError) as e:
             logger.warning(
-                "Пропускаю секцию %r в %s: %s. Добавьте command: и response: или переименуйте секцию в !%s.",
+                "Пропускаю секцию %r в %s: %s. Нужен response:.",
                 section_name,
                 config_path,
                 e,
-                section_name.lstrip("!"),
             )
+            continue
+
+        entry = {"response": response}
+        for opt in ("telegramNotification", "notificationText"):
+            val = check_param(opt, section, raise_if_not_exists=False)
+            if val is not None:
+                entry[opt] = val
+
+        commands = [i.strip().lower() for i in section_name.split("|") if i.strip()]
+        for cmd in commands:
+            if cmd in result:
+                logger.warning(
+                    "Дубликат команды %r в %s (секция %r) — пропускаю.",
+                    cmd, config_path, section_name,
+                )
+                continue
+            result[cmd] = dict(entry)
     return result
 
 def load_raw_auto_response_config(config_path: str):
@@ -218,40 +236,36 @@ def load_auto_delivery_config(config_path: str):
             )
             continue
 
-        goods_file = _resolve_goods_file(section)
-        if not goods_file:
-            logger.warning(
-                "Пропускаю секцию %r в %s: не привязан goods_file.",
-                section_name, config_path,
-            )
-            continue
-
         try:
             response = check_param("response", section)
         except (ParamNotFoundError, EmptyValueError) as e:
             logger.warning("Пропускаю секцию %r в %s: %s.", section_name, config_path, e)
             continue
 
-        if not os.path.exists(goods_file):
-            logger.warning(
-                "Пропускаю секцию %r в %s: файл %r не найден.",
-                section_name, config_path, goods_file,
-            )
-            continue
-
-        if "$product" not in response:
-            logger.warning(
-                "Пропускаю секцию %r в %s: в response нет $product.",
-                section_name, config_path,
-            )
-            continue
+        goods_file = _resolve_goods_file(section)
+        # Без файла — обычная (бесконечная) выдача одного текста.
+        # С файлом — лимитированная: по одному товару/ключу с каждой строки.
+        if goods_file:
+            if not os.path.exists(goods_file):
+                logger.warning(
+                    "Пропускаю секцию %r в %s: файл %r не найден.",
+                    section_name, config_path, goods_file,
+                )
+                continue
+            if "$product" not in response:
+                logger.warning(
+                    "Пропускаю секцию %r в %s: в response нет $product (нужен для лимитированной выдачи).",
+                    section_name, config_path,
+                )
+                continue
 
         entry = {
+            "name": section_name,
             "lot_id": lot_id,
             "goods_file": goods_file,
             "response": response,
         }
-        for opt in ("disableMultiDelivery", "disableAutoDisable", "disableAutoRestore"):
+        for opt in ("disable", "disableMultiDelivery", "disableAutoDisable", "disableAutoRestore"):
             val = check_param(opt, section, valid_values=["0", "1"], raise_if_not_exists=False)
             if val is not None:
                 entry[opt] = val

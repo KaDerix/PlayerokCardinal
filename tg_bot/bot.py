@@ -288,8 +288,10 @@ class TGBot:
             try:
                 handler(call)
             except Exception as e:
-                logger.error(_("log_tg_handler_error") + f" (handler: {handler_name}, data: {call.data})")
-                logger.debug("TRACEBACK", exc_info=True)
+                logger.error(
+                    _("log_tg_handler_error") + f" (handler: {handler_name}, data: {call.data}): {e}",
+                    exc_info=True,
+                )
 
     def mdw_handler(self, handler, **kwargs):
         """
@@ -345,12 +347,12 @@ class TGBot:
                 utils.save_notification_settings(self.notification_settings)
             text = _("access_granted", language=lang)
             kb_links = None
-            logger.warning(_("log_access_granted", m.from_user.username, m.from_user.id))
+            logger.info(_("log_access_granted", m.from_user.username, m.from_user.id))
         else:
             self.attempts[m.from_user.id] = self.attempts.get(m.from_user.id, 0) + 1
             text = _("access_denied", m.from_user.username, language=lang)
             kb_links = kb.LINKS_KB(language=lang)
-            logger.warning(_("log_access_attempt", m.from_user.username, m.from_user.id))
+            logger.info(_("log_access_attempt", m.from_user.username, m.from_user.id))
         self.bot.send_message(m.chat.id, text, reply_markup=kb_links)
 
     def ignore_unauthorized_users(self, c: CallbackQuery):
@@ -818,8 +820,8 @@ class TGBot:
                                    reply_markup=kb.power_off(instance_id, state))
         self.bot.answer_callback_query(c.id)
 
-    # Чат FunPay
-    def act_send_funpay_message(self, c: CallbackQuery):
+    # Чат Playerok
+    def act_send_playerok_message(self, c: CallbackQuery):
         """
         Активирует режим ввода сообщения для отправки его в чат Playerok.
         """
@@ -835,10 +837,10 @@ class TGBot:
             username = ""
         result = self.bot.send_message(c.message.chat.id, _("enter_msg_text"), reply_markup=skb.CLEAR_STATE_BTN())
         self.set_state(c.message.chat.id, result.id, c.from_user.id,
-                       CBT.SEND_FP_MESSAGE, {"node_id": node_id, "username": username})
+                       CBT.SEND_PK_MESSAGE, {"node_id": node_id, "username": username})
         self.bot.answer_callback_query(c.id)
 
-    def send_funpay_message(self, message: Message):
+    def send_playerok_message(self, message: Message):
         """
         Отправляет сообщение в чат Playerok.
         """
@@ -853,7 +855,7 @@ class TGBot:
             from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B
             keyboard = K()
             keyboard.row(
-                B(_("msg_reply2"), None, f"{CBT.SEND_FP_MESSAGE}:{node_id}"),
+                B(_("msg_reply2"), None, f"{CBT.SEND_PK_MESSAGE}:{node_id}"),
                 B(_("msg_templates"), None, f"{CBT.TMPLT_LIST_ANS_MODE}:0:{node_id}:1:1")
             )
             keyboard.row(B(_("msg_more"), None, f"{CBT.EXTEND_CHAT}:{node_id}"))
@@ -862,7 +864,7 @@ class TGBot:
         else:
             keyboard = K()
             keyboard.row(
-                B(_("msg_reply"), None, f"{CBT.SEND_FP_MESSAGE}:{node_id}"),
+                B(_("msg_reply"), None, f"{CBT.SEND_PK_MESSAGE}:{node_id}"),
                 B(_("msg_templates"), None, f"{CBT.TMPLT_LIST_ANS_MODE}:0:{node_id}:0:0")
             )
             keyboard.row(B(f"🌐 {username}", url=f"https://playerok.com/chats/{node_id}"))
@@ -980,8 +982,32 @@ class TGBot:
         deal_id = c.data.split(":")[1]
         try:
             from PlayerokAPI.enums import ItemDealStatuses
+            deal = self.cardinal.account.get_deal(deal_id)
+            st = getattr(getattr(deal, "status", None), "name", None) or ""
+            if st in ("SENT", "CONFIRMED"):
+                self.bot.answer_callback_query(c.id, "Заказ уже выполнен", show_alert=False)
+                try:
+                    username = getattr(getattr(deal, "user", None), "username", "") or ""
+                    chat_id = str(getattr(getattr(deal, "chat", None), "id", "") or "")
+                    self.bot.edit_message_reply_markup(
+                        c.message.chat.id, c.message.id,
+                        reply_markup=kb.new_order(deal_id, username, chat_id, deal_status=st),
+                    )
+                except Exception:
+                    pass
+                return
             self.cardinal.account.update_deal(deal_id, ItemDealStatuses.SENT)
             self.bot.answer_callback_query(c.id, "✅ Заказ выполнен")
+            logger.info(_("log_order_sent", deal_id))
+            try:
+                username = getattr(getattr(deal, "user", None), "username", "") or ""
+                chat_id = str(getattr(getattr(deal, "chat", None), "id", "") or "")
+                self.bot.edit_message_reply_markup(
+                    c.message.chat.id, c.message.id,
+                    reply_markup=kb.new_order(deal_id, username, chat_id, deal_status="SENT"),
+                )
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"mark_deal_sent {deal_id}: {e}")
             self.bot.answer_callback_query(c.id, _("msg_sending_error_short"), show_alert=True)
@@ -1041,7 +1067,7 @@ class TGBot:
         
         keyboard = K()
         keyboard.row(
-            B(_("msg_reply"), None, f"{CBT.SEND_FP_MESSAGE}:{chat_id}"),
+            B(_("msg_reply"), None, f"{CBT.SEND_PK_MESSAGE}:{chat_id}"),
             B(_("msg_templates"), None, f"{CBT.TMPLT_LIST_ANS_MODE}:0:{chat_id}:0:0")
         )
         keyboard.row(B(f"🌐 {username}", url=f"https://playerok.com/chats/{chat_id}"))
@@ -1057,7 +1083,7 @@ class TGBot:
         """
         deal_id = call.data.split(":")[1]
         try:
-            _, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
+            _deal, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
         except Exception as e:
             logger.error(f"Ошибка получения сделки {deal_id}: {e}")
             node_id, username = "", ""
@@ -1071,7 +1097,7 @@ class TGBot:
         """
         deal_id = call.data.split(":")[1]
         try:
-            _, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
+            _deal, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
         except Exception as e:
             logger.error(f"Ошибка получения сделки {deal_id}: {e}")
             node_id, username = "", ""
@@ -1084,50 +1110,93 @@ class TGBot:
         Оформляет возврат за заказ.
         """
         deal_id = c.data.split(":")[1]
+        node_id, username = "", ""
         try:
-            _, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
+            _deal, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
         except Exception as e:
-            logger.error(f"Ошибка получения сделки {deal_id}: {e}")
-            node_id, username = "", ""
-        new_msg = None
-        attempts = 3
-        while attempts:
+            logger.warning(f"Контекст сделки {deal_id}: {e}")
+
+        try:
+            self.bot.answer_callback_query(c.id, "⏳ Возврат…")
+        except Exception:
+            pass
+
+        last_err = None
+        ok = False
+        for attempt in range(1, 4):
             try:
-                # В PlayerokAPI используется update_deal вместо refund
                 from PlayerokAPI import enums
                 self.cardinal.account.update_deal(deal_id, enums.ItemDealStatuses.ROLLED_BACK)
+                ok = True
                 break
-            except:
-                if not new_msg:
-                    new_msg = self.bot.send_message(c.message.chat.id, _("refund_attempt", deal_id, attempts))
-                else:
-                    self.bot.edit_message_text(_("refund_attempt", deal_id, attempts), new_msg.chat.id, new_msg.id)
-                attempts -= 1
+            except Exception as e:
+                last_err = e
+                logger.warning(f"Возврат {deal_id} попытка {attempt}/3: {e}")
                 time.sleep(1)
 
-        else:
-            self.bot.edit_message_text(_("refund_error", deal_id), new_msg.chat.id, new_msg.id)
+        if not ok:
+            # Возможно уже возвращено — проверяем статус
+            try:
+                deal = self.cardinal.account.get_deal(deal_id)
+                status = getattr(getattr(deal, "status", None), "name", str(getattr(deal, "status", "")))
+                if status == "ROLLED_BACK":
+                    ok = True
+            except Exception:
+                pass
 
-            keyboard = kb.new_order(deal_id, username, node_id)
-            self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id, reply_markup=keyboard)
-            self.bot.answer_callback_query(c.id)
+        if not ok:
+            self.bot.send_message(
+                c.message.chat.id,
+                _("refund_error", deal_id) + (f"\n<code>{utils.escape(str(last_err))}</code>" if last_err else ""),
+            )
+            try:
+                self.bot.edit_message_reply_markup(
+                    c.message.chat.id, c.message.id,
+                    reply_markup=kb.new_order(deal_id, username, node_id),
+                )
+            except Exception:
+                pass
             return
 
-        if not new_msg:
-            self.bot.send_message(c.message.chat.id, _("refund_complete", deal_id))
-        else:
-            self.bot.edit_message_text(_("refund_complete", deal_id), new_msg.chat.id, new_msg.id)
+        self.bot.send_message(c.message.chat.id, _("refund_complete", deal_id))
+        logger.info(f"$YELLOW✦$RESET Возврат оформлен     $CYAN#{deal_id}$RESET · $MAGENTA{username or '—'}$RESET")
 
-        keyboard = kb.new_order(deal_id, username, node_id, no_refund=True)
-        self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id, reply_markup=keyboard)
-        self.bot.answer_callback_query(c.id)
+        # После возврата лот нужно вернуть в продажу (с паузой — API иногда лагает)
+        if self.cardinal.autorestore_enabled:
+            try:
+                from threading import Thread
+                from handlers import _restore_item_by_id
+                deal_obj = self.cardinal.account.get_deal(deal_id)
+                item = getattr(deal_obj, "item", None) if deal_obj else None
+                item_id = str(getattr(item, "id", "") or "")
+                if item_id:
+                    item_name = getattr(item, "name", None) or item_id
+                    def _run():
+                        time.sleep(3)
+                        _restore_item_by_id(
+                            self.cardinal,
+                            item_id,
+                            item_name=item_name,
+                            deal_item=item,
+                        )
+                    Thread(target=_run, daemon=True).start()
+            except Exception as e:
+                logger.warning(f"Restore after refund {deal_id}: {e}")
+
+        try:
+            self.bot.edit_message_reply_markup(
+                c.message.chat.id, c.message.id,
+                reply_markup=kb.new_order(deal_id, username, node_id, no_refund=True),
+            )
+        except Exception as e:
+            logger.warning(f"Не удалось обновить кнопки после возврата {deal_id}: {e}")
 
     def open_order_menu(self, c: CallbackQuery):
         split = c.data.split(":")
         deal_id = split[1]
         no_refund = bool(int(split[2])) if len(split) > 2 else False
         try:
-            _, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
+            _deal, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
         except Exception as e:
             logger.error(f"Ошибка получения сделки {deal_id}: {e}")
             node_id, username = "", ""
@@ -1166,7 +1235,7 @@ class TGBot:
         split = c.data.split(":")
         section, option = split[1], split[2]
 
-        if (section == "FunPay" or section == "Playerok") and option == "oldMsgGetMode":
+        if section == "Playerok" and option == "oldMsgGetMode":
             self.cardinal.switch_msg_get_mode()
         else:
             if section not in self.cardinal.MAIN_CFG:
@@ -1177,7 +1246,6 @@ class TGBot:
             self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
 
         sections = {
-            "FunPay": kb.main_settings,
             "Playerok": kb.main_settings,
             "BlockList": kb.blacklist_settings,
             "NewMessageView": kb.new_message_view_settings,
@@ -1372,11 +1440,11 @@ class TGBot:
         self.msg_handler(self.restart_cardinal, commands=["restart"])
         self.msg_handler(self.ask_power_off, commands=["power_off"])
         self.msg_handler(self.send_announcements_kb, commands=["announcements"])
-        self.cbq_handler(self.act_send_funpay_message, lambda c: c.data.startswith(f"{CBT.SEND_FP_MESSAGE}:"))
+        self.cbq_handler(self.act_send_playerok_message, lambda c: c.data.startswith(f"{CBT.SEND_PK_MESSAGE}:"))
         self.cbq_handler(self.open_reply_menu, lambda c: c.data.startswith(f"{CBT.BACK_TO_REPLY_KB}:"))
         self.cbq_handler(self.extend_new_message_notification, lambda c: c.data.startswith(f"{CBT.EXTEND_CHAT}:"))
-        self.msg_handler(self.send_funpay_message,
-                         func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.SEND_FP_MESSAGE))
+        self.msg_handler(self.send_playerok_message,
+                         func=lambda m: self.check_state(m.chat.id, m.from_user.id, CBT.SEND_PK_MESSAGE))
         self.cbq_handler(self.ask_confirm_refund, lambda c: c.data.startswith(f"{CBT.REQUEST_REFUND}:"))
         self.cbq_handler(self.cancel_refund, lambda c: c.data.startswith(f"{CBT.REFUND_CANCELLED}:"))
         self.cbq_handler(self.refund, lambda c: c.data.startswith(f"{CBT.REFUND_CONFIRMED}:"))

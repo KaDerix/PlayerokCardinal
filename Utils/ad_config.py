@@ -1,4 +1,3 @@
-"""Синхронизация raw/list конфигов автовыдачи."""
 from __future__ import annotations
 
 import logging
@@ -21,6 +20,11 @@ DEFAULT_RESPONSE = (
     "$product"
 )
 
+DEFAULT_RESPONSE_REGULAR = (
+    "Спасибо за покупку, $username!\n\n"
+    "Ваш товар готов."
+)
+
 
 def goods_file_path(section) -> str | None:
     raw = section.get("goods_file") or section.get("productsFileName")
@@ -37,6 +41,23 @@ def goods_file_basename(section) -> str | None:
     if not path:
         return None
     return os.path.basename(path)
+
+
+def is_limited_lot(section) -> bool:
+    return bool(goods_file_path(section))
+
+
+def section_entries(raw_cfg: ConfigParser, mode: str | None = None) -> list[tuple[int, str]]:
+    names = section_names(raw_cfg)
+    out: list[tuple[int, str]] = []
+    for idx, name in enumerate(names):
+        limited = is_limited_lot(raw_cfg[name])
+        if mode == "regular" and limited:
+            continue
+        if mode == "limited" and not limited:
+            continue
+        out.append((idx, name))
+    return out
 
 
 def migrate_section(section) -> None:
@@ -89,11 +110,18 @@ def find_profile_lot(cardinal: Cardinal, title: str):
     return None
 
 
-def add_lot_section(cardinal: Cardinal, title: str, lot_id: str = "") -> str:
+def add_lot_section(
+    cardinal: Cardinal,
+    title: str,
+    lot_id: str = "",
+    *,
+    limited: bool = False,
+) -> str:
     raw = cardinal.RAW_AD_CFG
     if title not in raw.sections():
         raw.add_section(title)
-    raw[title]["response"] = raw[title].get("response") or DEFAULT_RESPONSE
+    default = DEFAULT_RESPONSE if limited else DEFAULT_RESPONSE_REGULAR
+    raw[title]["response"] = raw[title].get("response") or default
     if lot_id:
         raw[title]["lot_id"] = str(lot_id)
     save_ad_cfg(cardinal)

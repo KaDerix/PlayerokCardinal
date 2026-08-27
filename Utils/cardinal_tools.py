@@ -317,6 +317,20 @@ def ensure_main_sections(main_cfg: dict) -> bool:
             if key not in main_cfg[section]:
                 main_cfg[section][key] = value
                 changed = True
+
+    # Миграция старых ключей NewMessageView (FP → Playerok)
+    nmv = main_cfg.get("NewMessageView")
+    if isinstance(nmv, dict):
+        renames = {
+            "includeFPMessages": "includePlayerokMessages",
+            "notifyOnlyFPMessages": "notifyOnlyPlayerokMessages",
+        }
+        for old, new in renames.items():
+            if old in nmv:
+                if new not in nmv:
+                    nmv[new] = nmv[old]
+                del nmv[old]
+                changed = True
     return changed
 
 

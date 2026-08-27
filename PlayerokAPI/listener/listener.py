@@ -44,6 +44,7 @@ class EventListener:
         self.chat_subscriptions = {}
         self.review_check_deals = []
         self.review_deal_times = {}
+        self.processed_reviews: set[str] = set()
         self.chats = []
         self.processed_deals = []
         self.active_deals = {} # chat_id: [(deal_id, last_status, status_date), ...]
@@ -157,7 +158,6 @@ class EventListener:
                     self.processed_deals.append(deal_id)
                 else:
                     return []
-                logger.info(f"Новая оплаченная сделка {deal_id} (чат {chat.id})")
                 return [
                     NewDealEvent(actual_deal, chat), 
                     ItemPaidEvent(actual_deal, chat)
@@ -476,9 +476,14 @@ class EventListener:
                     except: continue
                     
                     if deal.review:
+                        if deal_id in self.processed_reviews:
+                            if deal_id in self.review_check_deals:
+                                self.review_check_deals.remove(deal_id)
+                            continue
+                        self.processed_reviews.add(deal_id)
                         if deal_id in self.review_check_deals:
                             self.review_check_deals.remove(deal_id)
-                        
+
                         try: 
                             deal.chat = [chat_ for chat_ in self.chats if chat_.id == deal.chat.id][0]
                         except: 

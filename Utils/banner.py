@@ -1,5 +1,3 @@
-"""Баннер при запуске Playerok Cardinal."""
-
 _R = "\033[0m"
 _B = "\033[1m"
 
@@ -20,7 +18,6 @@ def _osc_link(url: str, text: str) -> str:
 
 
 def _row(visible: str, display: str | None = None) -> str:
-    """Строка рамки: ширина считается по visible, рисуется display (или visible)."""
     content = display if display is not None else visible
     pad = max(0, W_INNER - len(visible))
     left = pad // 2

@@ -665,7 +665,7 @@ def my_item(data: dict) -> "MyItem":
     if not data:
         return None
 
-    return MyItem(
+    result = MyItem(
         id=data.get("id"),
         slug=data.get("slug"),
         name=data.get("name"),
@@ -695,12 +695,21 @@ def my_item(data: dict) -> "MyItem":
         status_description=data.get("statusDescription"),
         status_payment=transaction(data.get("statusPayment")),
         views_counter=data.get("viewsCounter"),
-        is_editable=data.get("isEditable"),
+        # API отдаёт editable / mayBePublished, не isEditable
+        is_editable=bool(
+            data["isEditable"] if data.get("isEditable") is not None
+            else data.get("editable")
+        ),
         approval_date=data.get("approvalDate"),
         deleted_at=data.get("deletedAt"),
         updated_at=data.get("updatedAt"),
         created_at=data.get("createdAt"),
     )
+    if data.get("mayBePublished") is not None:
+        result.may_be_published = bool(data.get("mayBePublished"))
+    else:
+        result.may_be_published = None
+    return result
 
 
 def item_profile(data: dict) -> "ItemProfile":

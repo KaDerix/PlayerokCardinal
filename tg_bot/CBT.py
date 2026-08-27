@@ -110,13 +110,14 @@ command_index: int - числовой индекс команды.
 offset: int - смещение списка команд.
 """
 
-# FUNPAY LOTS LIST
-FP_LOTS_LIST = "11"
+# PLAYEROK LOTS LIST
+PK_LOTS_LIST = "11"
+FP_LOTS_LIST = PK_LOTS_LIST  # alias
 """
-Callback для открытия списка лотов, спарсенных напрямую с Funpay.
-Использование: CBT.FP_LOTS_LIST:offset
+Callback для открытия списка лотов, профиля Playerok.
+Использование: CBT.PK_LOTS_LIST:offset
 
-offset: int - смещение списка FunPay лотов.
+offset: int - смещение списка лотов.
 """
 
 ADD_AD_TO_LOT = "12"
@@ -124,8 +125,8 @@ ADD_AD_TO_LOT = "12"
 Callback для подключения к лоту автовыдачи.
 Использование: CBT.ADD_AD_TO_LOT:lot_index:offset
 
-lot_index: int - числовой индекс FunPay лота.
-offset: int - смещение списка FunPay лотов.
+lot_index: int - числовой индекс лота Playerok.
+offset: int - смещение списка лотов.
 """
 
 ADD_AD_TO_LOT_MANUALLY = "13"
@@ -133,12 +134,12 @@ ADD_AD_TO_LOT_MANUALLY = "13"
 Callback для активации режима ввода названия лота для подключения к нему автовыдачи.
 Использование: CBT.ADD_AD_TO_LOT_MANUALLY:offset
 
-offset: int - смещение списка FunPay лотов.
+offset: int - смещение списка лотов.
 
 
 User-state: ожидается сообщение с названием лота для подключения к нему автовыдачи.
 data:
-offset: int - смещение списка FunPay лотов.
+offset: int - смещение списка лотов.
 """
 
 # Настройки лотов с автовыдачей
@@ -323,7 +324,7 @@ offset: int - смещение списка шаблонов ответа.
 
 SEND_TMPLT = "30"
 """
-Callback для отправки шаблона в ЛС FunPay.
+Callback для отправки шаблона в ЛС Playerok.
 Использование: CBT.SEND_TMPLT:index:node_id:username:prev_page:extra
 
 index: int - числовой индекс шаблона.
@@ -382,18 +383,18 @@ username: str - никнейм покупателя.
 
 BAN = "35"
 """
-Callback для активации режима ввода никнейма FunPay пользователя для добавления его в ЧС.
+Callback для активации режима ввода никнейма Playerok пользователя для добавления его в ЧС.
 
 
-User-state: ожидается сообщение с никнеймом FunPay пользователя для добавления его в ЧС.
+User-state: ожидается сообщение с никнеймом Playerok пользователя для добавления его в ЧС.
 """
 
 UNBAN = "36"
 """
-Callback для активации режима ввода никнейма FunPay пользователя для удаления его из ЧС.
+Callback для активации режима ввода никнейма Playerok пользователя для удаления его из ЧС.
 
 
-User-state: ожидается сообщение с никнеймом FunPay пользователя для удаления его из ЧС.
+User-state: ожидается сообщение с никнеймом Playerok пользователя для удаления его из ЧС.
 """
 
 SHUT_DOWN = "37"
@@ -410,10 +411,11 @@ CANCEL_SHUTTING_DOWN = "38"
 Callback для отмены отключения бота.
 """
 
-SEND_FP_MESSAGE = "to_node"
+SEND_PK_MESSAGE = "to_node"
+SEND_FP_MESSAGE = SEND_PK_MESSAGE  # alias
 """
 Callback для отправки сообщения в чат Playerok.
-Использование: CBT.SEND_FP_MESSAGE:node_id:username
+Использование: CBT.SEND_PK_MESSAGE:node_id:username
 
 node_id: str - ID переписки (UUID в PlayerokAPI), в которую нужно отправить сообщение.
 username: str - никнейм пользователя, переписка с которым ведется.
@@ -421,12 +423,12 @@ username: str - никнейм пользователя, переписка с �
 
 UPLOAD_CHAT_IMAGE = "upload_chat_image"
 """
-User-state: ожидается сообщение с изображением для выгрузки на сервер FunPay (чат).
+User-state: ожидается сообщение с изображением для выгрузки (чат Playerok).
 """
 
 UPLOAD_OFFER_IMAGE = "upload_offer_image"
 """
-User-state: ожидается сообщение с изображением для выгрузки на сервер FunPay (лот).
+User-state: ожидается сообщение с изображением для выгрузки (лот Playerok).
 """
 
 UPLOAD_BACKUP = "upload_backup"
@@ -654,7 +656,7 @@ Callback для активации режима ввода token Playerok.
 User-state: ожидается сообщение с token.
 """
 
-# Обратная совместимость (старое имя из FunPay Cardinal)
+# Обратная совместимость (alias)
 CHANGE_GOLDEN_KEY = CHANGE_TOKEN
 
 CONFIG_LOADER = "66"
@@ -711,3 +713,35 @@ Callback для удаления прокси.
 
 MARK_DEAL_SENT = "76"
 """Отметить сделку отправленной. CBT.MARK_DEAL_SENT:deal_id"""
+
+# Исключения авто-восстановления
+AR_EXCL = "ar_excl"
+"""Главное меню исключений авто-восстановления."""
+
+AR_EXCL_LOTS = "ar_excl_lots"
+"""Список исключённых лотов. CBT.AR_EXCL_LOTS:offset"""
+
+AR_EXCL_CATS = "ar_excl_cats"
+"""Список исключённых категорий. CBT.AR_EXCL_CATS:offset"""
+
+AR_EXCL_ADD_LOT = "ar_excl_add_lot"
+"""Ввод ID лота для исключения."""
+
+AR_EXCL_ADD_CAT = "ar_excl_add_cat"
+"""Ввод slug/id категории для исключения."""
+
+AR_EXCL_DEL_LOT = "ar_excl_del_lot"
+"""Удалить лот из исключений. CBT.AR_EXCL_DEL_LOT:item_id:offset"""
+
+AR_EXCL_DEL_CAT = "ar_excl_del_cat"
+"""Удалить категорию из исключений. CBT.AR_EXCL_DEL_CAT:index:offset"""
+
+AR_EXCL_PICK_LOT = "ar_excl_pick_lot"
+"""Выбрать лот из профиля. CBT.AR_EXCL_PICK_LOT:offset"""
+
+AR_EXCL_TOGGLE_LOT = "ar_excl_toggle_lot"
+"""Добавить выбранный лот профиля. CBT.AR_EXCL_TOGGLE_LOT:lot_index:list_offset"""
+
+AR_EXCL_ADD_STARS = "ar_excl_add_stars"
+"""Быстро добавить категорию stars."""
+

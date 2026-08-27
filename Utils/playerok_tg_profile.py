@@ -1,5 +1,5 @@
 """
-Адаптер профиля лотов для Telegram-ПУ (совместимость с FunPay Cardinal API).
+Адаптер профиля лотов для Telegram-ПУ (адаптер для Telegram-ПУ).
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class LotShortcutStub:
 
 
 class PlayerokTGProfile:
-    """Минимальная замена FunPay UserProfile для tg_profile / auto_delivery."""
+    """Профиль лотов для tg_profile / auto_delivery."""
 
     def __init__(self, lots: list[LotShortcutStub]):
         self._lots = lots

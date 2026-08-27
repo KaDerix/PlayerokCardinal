@@ -1,6 +1,6 @@
 """
 Слой совместимости для плагинов (get_lot_fields, SubCategoryTypes).
-Не FunPay API — только методы, которые ожидают старые плагины Cardinal.
+Слой совместимости для старых плагинов Cardinal (не публичный API).
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class SubCategoryTypes:
 
 
 class LotFields:
-    """FunPay-like lot fields built from a Playerok item."""
+    """Поля лота, собранные из предмета Playerok (для старых плагинов)."""
 
     def __init__(
         self,
@@ -159,7 +159,7 @@ def _publish_default(account, item_id: str, item) -> None:
 
 
 def apply_fp_compat(account) -> None:
-    """Attach FunPay-compatible methods to a Playerok Account instance."""
+    """Подключает методы совместимости к Account."""
     if getattr(account, "_fp_compat_applied", False):
         return
 
