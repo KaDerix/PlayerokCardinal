@@ -46,7 +46,6 @@ def load_main_config(config_path: str):
             "autoResponse": ["0", "1"],
             "autoDelivery": ["0", "1"],
             "autoRestore": ["0", "1"],
-            "autoRaise": ["0", "1"],
             "multiDelivery": ["0", "1"],
             "autoDisable": ["0", "1"],
             "autoCompleteDeals": ["0", "1"],
@@ -100,7 +99,7 @@ def load_main_config(config_path: str):
                 with open(config_path, "w", encoding="utf-8") as f:
                     config.write(f)
             elif section_name == "Playerok" and key in (
-                "autoRaise", "multiDelivery", "autoDisable", "autoCompleteDeals", "autoWithdrawal"
+                "multiDelivery", "autoDisable", "autoCompleteDeals", "autoWithdrawal"
             ) and key not in section:
                 config.set("Playerok", key, "0")
                 with open(config_path, "w", encoding="utf-8") as f:

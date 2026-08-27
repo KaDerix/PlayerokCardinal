@@ -34,7 +34,6 @@ mm_authorized_users = "👥 Authorized Users"
 mm_proxy = "🌐 Proxy"
 
 # Global switches
-gs_autoraise = "{} Auto-raise"
 gs_autoresponse = "{} Autoresponse"
 gs_autodelivery = "{} Auto-delivery"
 gs_nultidelivery = "{} Multi-delivery"
@@ -53,7 +52,6 @@ ns_order_confirmed = "{} Order confirmed"
 ns_lot_activate = "{} Lot reactivated"
 ns_lot_deactivate = "{} Lot deactivated"
 ns_delivery = "{} Goods delivered"
-ns_raise = "{} Lots raised"
 ns_new_review = "{} New review"
 ns_bot_start = "{} Bot start"
 ns_other = "{} Other (plugins)"
@@ -127,13 +125,17 @@ oc_send_reply = "{} Send message"
 oc_edit_message = "✏️ Change the text of the message"
 
 or_edit_reply = "✏️ {}★ review"
-mm_auto_bump = "⬆️ Auto bump"
-ab_enabled = "{} Auto bump"
-ab_interval = "⏱ Interval: {} sec"
-ab_edit_interval = "⏱ Change interval"
-ab_all_items = "{} All items"
-desc_ab = "Auto bump settings.\n\nInterval: <code>{}</code> sec\nLast run: <code>{}</code>"
-ord_mark_sent = "✅ Mark as sent"
+
+sys_playerok = "Playerok"
+sys_msg_item_paid = "Order paid"
+sys_msg_item_sent = "Item sent"
+sys_msg_deal_confirmed = "Deal confirmed"
+sys_msg_deal_confirmed_auto = "Deal confirmed automatically"
+sys_msg_deal_rolled_back = "Deal refunded"
+sys_msg_deal_has_problem = "Deal problem reported"
+sys_msg_deal_problem_resolved = "Deal problem resolved"
+
+ord_mark_sent = "✅ Complete order"
 
 # Appearance of new msg. notification
 mv_incl_my_msg = "{} Show my messages"
@@ -436,7 +438,6 @@ adv_poc = "😎 Playerok Cardinal (POC) - the best bot for Playerok"
 adv_description = """🐦 Playerok Cardinal v{}🐦
 
 🤖 Automatic product delivery
-🚀 Auto-raise of lots
 💬 Auto-reply to prepared commands
 🔄 Auto-recovery of lots after sale
 📦 Auto-deactivation of lots if products are out of stock
@@ -636,11 +637,6 @@ crd_profile_get_unexpected_err = "An unexpected error occurred while retrieving 
 crd_profile_get_too_many_attempts_err = "An error occurred while getting data about the lots of the account: the number of attempts ({}) was exceeded."
 crd_profile_updated = "Updated the information about profile lots $YELLOW({})$RESET and categories $YELLOW({})$RESET."
 crd_tg_profile_updated = "Updated the information about profile lots $YELLOW({})$RESET and categories $YELLOW({})$RESET (Telegram Control Panel)."
-crd_raise_time_err = "The $CYAN\"{}\"$RESET category lots could not be raised. Playerok says: \"{}\". Next attempt in {}."
-crd_raise_unexpected_err = "An unexpected error occurred while trying to raise $CYAN\"{}\"$RESET catgory lots. Pause for 10 seconds."
-crd_raise_status_code_err = "Error {} when raising lots of the $CYAN\"{}\"$RESET category. Pause for 1 minute..."
-crd_lots_raised = "All lots in the $CYAN\"{}\"$RESET category are raised!"
-crd_raise_wait_3600 = "Next attempt in {}."
 crd_msg_send_err = "An error occurred when sending a message to chat $YELLOW{}$RESET."
 crd_msg_attempts_left = "Attempts left: $YELLOW{}$RESET."
 crd_msg_no_more_attempts_err = "Failed to send a message to chat $YELLOW{}$RESET: the number of attempts exceeded."
@@ -649,8 +645,6 @@ crd_session_timeout_err = "Failed to refresh session: timeout exceeded."
 crd_session_unexpected_err = "An unexpected error occurred while refreshing the session."
 crd_session_no_more_attempts_err = "Failed to refresh session: the number of attempts was exceeded."
 crd_session_updated = "Session updated."
-crd_raise_loop_started = "$CYANThe auto-raise loop is running (this does not mean that auto-raise are enabled)."
-crd_raise_loop_not_started = "$CYANThe auto-raise loop was not started because there are no lots detected on the account."
 crd_session_loop_started = "$CYANThe session refresh loop is running."
 crd_no_plugins_folder = "The plugins folder is not detected."
 crd_no_plugins = "No plugins detected."

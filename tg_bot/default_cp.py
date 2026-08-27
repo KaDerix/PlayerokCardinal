@@ -39,7 +39,6 @@ def init_default_cp(crd: Cardinal, *args):
     # ОТКЛЮЧЕНО: Этот обработчик мешает работе плагинов, так как перехватывает все callback'и
     # Плагины должны регистрировать свои обработчики с правильными фильтрами
     # tg.cbq_handler(default_callback_answer, lambda c: True)
-    logger.debug("default_callback_answer отключен для корректной работы плагинов")
 
 
 BIND_TO_PRE_INIT = [init_default_cp]

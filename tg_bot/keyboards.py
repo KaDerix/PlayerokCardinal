@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B
 
 from Utils import ad_config as adc
-from tg_bot import MENU_CFG
+from tg_bot import CBT, MENU_CFG
 from tg_bot.utils import NotificationTypes, bool_to_text, add_navigation_buttons
 
 import Utils
@@ -107,14 +107,13 @@ def main_settings(c: Cardinal) -> K:
             return "🔄 Авто-восстановление: Премиум"
 
     kb = K() \
-        .row(B(_("gs_autoraise", l('autoRaise')), None, f"{p}:autoRaise"),
-             B(_("gs_autoresponse", l('autoResponse')), None, f"{p}:autoResponse")) \
-        .row(B(_("gs_autodelivery", l('autoDelivery')), None, f"{p}:autoDelivery"),
-             B(_("gs_nultidelivery", l('multiDelivery')), None, f"{p}:multiDelivery")) \
-        .row(B(_("gs_autorestore", l('autoRestore')), None, f"{p}:autoRestore"),
-             B(_("gs_autodisable", l('autoDisable')), None, f"{p}:autoDisable")) \
-        .row(B(_("gs_autocomplete", l('autoCompleteDeals')), None, f"{p}:autoCompleteDeals"),
-             B(_("gs_autowithdrawal", l('autoWithdrawal')), None, f"{p}:autoWithdrawal")) \
+        .row(B(_("gs_autoresponse", l('autoResponse')), None, f"{p}:autoResponse"),
+             B(_("gs_autodelivery", l('autoDelivery')), None, f"{p}:autoDelivery")) \
+        .row(B(_("gs_nultidelivery", l('multiDelivery')), None, f"{p}:multiDelivery"),
+             B(_("gs_autorestore", l('autoRestore')), None, f"{p}:autoRestore")) \
+        .row(B(_("gs_autodisable", l('autoDisable')), None, f"{p}:autoDisable"),
+             B(_("gs_autocomplete", l('autoCompleteDeals')), None, f"{p}:autoCompleteDeals")) \
+        .row(B(_("gs_autowithdrawal", l('autoWithdrawal')), None, f"{p}:autoWithdrawal")) \
         .row(B(get_restore_mode_text(), None, f"{CBT.SWITCH_RESTORE_PRIORITY}")) \
         .row(B(_("gs_old_msg_mode", l('oldMsgGetMode')), None, f"{p}:oldMsgGetMode"),
              B(f"❔", None, f"{CBT.OLD_MOD_HELP}"))
@@ -214,19 +213,6 @@ def review_reply_settings(c: Cardinal):
         has_text = bool(rr.get(f"reply{stars}", "").strip())
         label = _("or_edit_reply", stars) if has_text else f"⭐ {stars} —"
         kb.add(B(label, None, f"{CBT.EDIT_REVIEW_REPLY_TEXT}:{stars}"))
-    kb.add(B(_("gl_back"), None, CBT.MAIN2))
-    return kb
-
-
-def auto_bump_settings(c: Cardinal):
-    cfg = c.auto_bump_cfg
-    interval = int(cfg.get("interval") or 3600)
-    kb = K()
-    enabled = "🟢" if cfg.get("enabled") else "🔴"
-    kb.add(B(_("ab_enabled", enabled), None, f"{CBT.SWITCH}:AutoBump:enabled"))
-    kb.add(B(_("ab_interval", interval), None, CBT.EDIT_AUTO_BUMP_INTERVAL))
-    all_flag = "🟢" if cfg.get("all") else "🔴"
-    kb.add(B(_("ab_all_items", all_flag), None, f"{CBT.SWITCH}:AutoBump:all"))
     kb.add(B(_("gl_back"), None, CBT.MAIN2))
     return kb
 
@@ -612,21 +598,21 @@ def new_order(order_id: str, username: str, node_id: str | int,
 
     :return: объект клавиатуры для сообщения о новом заказе.
     """
-    # В PlayerokAPI node_id это UUID (строка)
-    node_id_str = str(node_id)
+    deal_id = str(order_id)
+    chat_id = str(node_id)
     kb = K()
     if not no_refund:
         if confirmation:
-            kb.row(B(_("gl_yes"), None, f"{CBT.REFUND_CONFIRMED}:{order_id}:{node_id_str}"),
-                   B(_("gl_no"), None, f"{CBT.REFUND_CANCELLED}:{order_id}:{node_id_str}"))
+            kb.row(B(_("gl_yes"), None, f"{CBT.REFUND_CONFIRMED}:{deal_id}"),
+                   B(_("gl_no"), None, f"{CBT.REFUND_CANCELLED}:{deal_id}"))
         else:
-            kb.add(B(_("ord_refund"), None, f"{CBT.REQUEST_REFUND}:{order_id}:{node_id_str}"))
+            kb.add(B(_("ord_refund"), None, f"{CBT.REQUEST_REFUND}:{deal_id}"))
 
-    kb.add(B(_("ord_open"), url=f"https://playerok.com/deals/{order_id}/")) \
-        .row(B(_("ord_mark_sent"), None, f"{CBT.MARK_DEAL_SENT}:{order_id}:{node_id_str}")) \
-        .row(B(_("ord_answer"), None, f"{CBT.SEND_FP_MESSAGE}:{node_id_str}"),
+    kb.add(B(_("ord_open"), url=f"https://playerok.com/deals/{deal_id}/")) \
+        .row(B(_("ord_mark_sent"), None, f"{CBT.MARK_DEAL_SENT}:{deal_id}")) \
+        .row(B(_("ord_answer"), None, f"{CBT.SEND_FP_MESSAGE}:{chat_id}"),
              B(_("ord_templates"), None,
-               f"{CBT.TMPLT_LIST_ANS_MODE}:0:{node_id_str}:2:{order_id}:{1 if no_refund else 0}"))
+               f"{CBT.TMPLT_LIST_ANS_MODE}:0:{deal_id}:2:{1 if no_refund else 0}"))
     return kb
 
 
@@ -737,7 +723,7 @@ def templates_list_ans_mode(c: Cardinal, offset: int, node_id: int, username: st
     elif prev_page == 1:
         kb.add(B(_("gl_back"), None, f"{CBT.BACK_TO_REPLY_KB}:{node_id}:1{extra_str}"))
     elif prev_page == 2:
-        kb.add(B(_("gl_back"), None, f"{CBT.BACK_TO_ORDER_KB}:{node_id}{extra_str}"))
+        kb.add(B(_("gl_back"), None, f"{CBT.BACK_TO_ORDER_KB}:{node_id}:{extra[0] if extra else 0}"))
     return kb
 
 

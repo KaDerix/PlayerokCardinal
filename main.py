@@ -34,7 +34,7 @@ import sys
 import os
 from cardinal import Cardinal
 import Utils.exceptions as excs
-from Utils.banner import LOGO as logo
+from Utils.banner import build_banner
 
 VERSION = "1.1.6"
 
@@ -64,13 +64,8 @@ colorama.init()
 logging.config.dictConfig(LOGGER_CONFIG)
 logging.raiseExceptions = False
 logger = logging.getLogger("main")
-logger.debug("------------------------------------------------------------------")
 
-print(f"{Style.RESET_ALL}{logo}")
-print(f"{Fore.RED}{Style.BRIGHT}v{VERSION}{Style.RESET_ALL}\n")
-print(f"{Fore.MAGENTA}{Style.BRIGHT}By {Fore.CYAN}{Style.BRIGHT}@KaDerix{Style.RESET_ALL}")
-print(f"{Fore.MAGENTA}{Style.BRIGHT} * GitHub: {Fore.CYAN}{Style.BRIGHT}github.com/KaDerix/PlayerokCardinal{Style.RESET_ALL}")
-print(f"{Fore.MAGENTA}{Style.BRIGHT} * Telegram: {Fore.CYAN}{Style.BRIGHT}t.me/KaDerix{Style.RESET_ALL}")
+print(f"{Style.RESET_ALL}{build_banner(VERSION)}")
 
 if not os.path.exists("configs/_main.cfg"):
     first_setup()
@@ -85,14 +80,11 @@ if sys.platform == "linux" and os.getenv('POC_IS_RUNNING_AS_SERVICE', '0') == '1
     logger.info(f"$GREENPID файл создан, PID процесса: {pid}")
 
 try:
-    logger.info("$MAGENTAЗагружаю конфиг _main.cfg...")
     MAIN_CFG = cfg_loader.load_main_config("configs/_main.cfg")
 
-    logger.info("$MAGENTAЗагружаю конфиг auto_response.cfg...")
     AR_CFG = cfg_loader.load_auto_response_config("configs/auto_response.cfg")
     RAW_AR_CFG = cfg_loader.load_raw_auto_response_config("configs/auto_response.cfg")
 
-    logger.info("$MAGENTAЗагружаю конфиг auto_delivery.cfg...")
     RAW_AD_CFG = cfg_loader.load_raw_auto_delivery_config("configs/auto_delivery.cfg")
     AD_CFG = cfg_loader.load_auto_delivery_config("configs/auto_delivery.cfg")
 except excs.ConfigParseError as e:

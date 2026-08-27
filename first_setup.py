@@ -15,7 +15,6 @@ default_config = {
         "autoResponse": "0",
         "autoDelivery": "0",
         "autoRestore": "0",
-        "autoRaise": "0",
         "multiDelivery": "0",
         "autoDisable": "0",
         "autoCompleteDeals": "0",
@@ -40,7 +39,7 @@ default_config = {
         "check": "0"
     },
     "Other": {
-        "watermark": "🎮",
+        "watermark": "𝐏𝐥𝐚𝐲𝐞𝐫𝐨𝐤 𝐂𝐚𝐫𝐝𝐢𝐧𝐚𝐥",
         "requestsDelay": "4"
     },
     "Greetings": {

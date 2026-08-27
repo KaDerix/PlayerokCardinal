@@ -11,8 +11,8 @@ LOG_COLORS = {
     logging.CRITICAL: Back.RED
 }
 
-CLI_LOG_FORMAT = f"{Fore.BLACK + Style.BRIGHT}[%(asctime)s]{Style.RESET_ALL}{Fore.CYAN}>{Style.RESET_ALL} $RESET%(levelname).1s: %(message)s{Style.RESET_ALL}"
-CLI_TIME_FORMAT = "%d-%m-%Y %H:%M:%S"
+CLI_LOG_FORMAT = f"{Fore.BLACK + Style.BRIGHT}[%(asctime)s]{Style.RESET_ALL} {Fore.CYAN}│{Style.RESET_ALL} $RESET%(message)s{Style.RESET_ALL}"
+CLI_TIME_FORMAT = "%H:%M:%S"
 FILE_LOG_FORMAT = "[%(asctime)s][%(filename)s][%(lineno)d]> %(levelname).1s: %(message)s"
 FILE_TIME_FORMAT = "%d.%m.%y %H:%M:%S"
 CLEAR_RE = re.compile(r"(\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]))|(\n)|(\r)")
@@ -68,7 +68,7 @@ LOGGER_CONFIG = {
     "handlers": {
         "file_handler": {
             "class": "logging.handlers.RotatingFileHandler",
-            "level": "DEBUG",
+            "level": "INFO",
             "formatter": "file_formatter",
             "filename": "logs/log.log",
             "maxBytes": 20 * 1024 * 1024,

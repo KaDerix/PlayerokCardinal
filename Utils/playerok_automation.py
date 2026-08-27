@@ -1,5 +1,5 @@
 """
-Фоновая автоматизация Playerok (поднятие, вывод, деактивация) и обработчики сделок.
+Фоновая автоматизация Playerok (вывод, деактивация) и обработчики сделок.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import time
 if TYPE_CHECKING:
     from cardinal import Cardinal
 
-from PlayerokAPI.enums import ItemStatuses, ItemDealStatuses, PriorityTypes, TransactionProviderIds
+from PlayerokAPI.enums import ItemDealStatuses, TransactionProviderIds
 from PlayerokAPI.listener.events import NewDealEvent
 import Utils.cardinal_tools as ct
 
@@ -31,79 +31,6 @@ def _should_run_interval(last_time: str, interval_sec: int) -> bool:
     except ValueError:
         return True
     return (datetime.now() - last_dt).total_seconds() >= interval_sec
-
-
-def bump_item(c: "Cardinal", item) -> bool:
-    try:
-        name = getattr(item, "name", "") or ""
-        name_short = name[:32] + ("..." if len(name) > 32 else "")
-        cfg = c.auto_bump_cfg
-        if not ct.item_matches_filter(name, cfg):
-            return False
-
-        item_id = getattr(item, "id", None)
-        if not item_id:
-            return False
-
-        raw_price = getattr(item, "raw_price", None) or getattr(item, "price", 0)
-        statuses = c.account.get_item_priority_statuses(item_id, str(raw_price))
-        prem = next(
-            (st for st in statuses if getattr(st, "type", None) == PriorityTypes.PREMIUM or getattr(st, "price", 0) > 0),
-            None,
-        )
-        if not prem:
-            logger.warning(f"PREMIUM статус не найден для «{name_short}»")
-            return False
-
-        time.sleep(1)
-        c.account.increase_item_priority_status(item_id, prem.id)
-        logger.info(f"Товар «{name_short}» поднят")
-        if c.telegram:
-            from tg_bot import utils
-            text = f"⬆️ Товар <code>{utils.escape(name)}</code> поднят."
-            Thread(target=c.telegram.send_notification, args=(text, None), daemon=True).start()
-        return True
-    except Exception as e:
-        logger.error(f"Ошибка поднятия товара: {e}")
-        logger.debug("TRACEBACK", exc_info=True)
-        return False
-
-
-def bump_items(c: "Cardinal") -> None:
-    if not c.autoraise_enabled or not c.auto_bump_cfg.get("enabled"):
-        return
-    try:
-        if not hasattr(c.account, "profile") or not c.account.profile:
-            c.account.get()
-        profile = c.account.profile
-        if not profile:
-            return
-        items = profile.get_items(count=24, statuses=[ItemStatuses.APPROVED])
-        item_list = getattr(items, "items", []) or []
-        up_items = [it for it in item_list if getattr(it, "priority", None) != PriorityTypes.DEFAULT]
-        cnt = 0
-        for item in up_items:
-            if bump_item(c, item):
-                cnt += 1
-            time.sleep(1)
-        c.auto_bump_cfg["last_time"] = datetime.now().isoformat()
-        ct.save_json_config("configs/auto_bump.json", c.auto_bump_cfg)
-        logger.info(f"Поднято товаров: {cnt}/{len(up_items)}")
-    except Exception as e:
-        logger.error(f"Ошибка bump_items: {e}")
-        logger.debug("TRACEBACK", exc_info=True)
-
-
-def bump_items_loop(c: "Cardinal") -> None:
-    while True:
-        try:
-            if c.autoraise_enabled and c.auto_bump_cfg.get("enabled"):
-                interval = int(c.auto_bump_cfg.get("interval") or 3600)
-                if _should_run_interval(c.auto_bump_cfg.get("last_time", ""), interval):
-                    bump_items(c)
-        except Exception as e:
-            logger.debug(f"bump_items_loop: {e}")
-        time.sleep(3)
 
 
 def try_auto_complete_deal(c: "Cardinal", event: NewDealEvent) -> None:

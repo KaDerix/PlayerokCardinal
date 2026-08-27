@@ -21,6 +21,71 @@ import unicodedata
 import Utils.cardinal_tools
 from tg_bot import CBT
 
+DEFAULT_WATERMARK = "𝐏𝐥𝐚𝐲𝐞𝐫𝐨𝐤 𝐂𝐚𝐫𝐝𝐢𝐧𝐚𝐥"
+
+
+def resolve_deal_context(cardinal: "Cardinal", deal_id: str) -> tuple[str, str, str]:
+    """Возвращает (deal_id, chat_id, username) по ID сделки."""
+    deal = cardinal.account.get_deal(deal_id)
+    chat_id = str(deal.chat.id) if deal.chat and getattr(deal.chat, "id", None) else ""
+    username = ""
+    if deal.user and getattr(deal.user, "username", None):
+        username = deal.user.username
+    return deal_id, chat_id, username
+
+
+def humanize_system_message(text: str, _) -> str | None:
+    if not text:
+        return None
+    t = text.strip()
+    labels = {
+        "{{ITEM_PAID}}": _("sys_msg_item_paid"),
+        "{{ITEM_SENT}}": _("sys_msg_item_sent"),
+        "{{DEAL_ROLLED_BACK}}": _("sys_msg_deal_rolled_back"),
+        "{{DEAL_HAS_PROBLEM}}": _("sys_msg_deal_has_problem"),
+        "{{DEAL_PROBLEM_RESOLVED}}": _("sys_msg_deal_problem_resolved"),
+        "{{DEAL_CONFIRMED}}": _("sys_msg_deal_confirmed"),
+        "{{DEAL_CONFIRMED_AUTOMATICALLY}}": _("sys_msg_deal_confirmed_auto"),
+    }
+    if t in labels:
+        return labels[t]
+    if t.startswith("{{DEAL_CONFIRMED") and t.endswith("}}"):
+        return _("sys_msg_deal_confirmed")
+    return None
+
+
+def format_chat_message_line(message, account_id: str, blacklist: list, _) -> str:
+    text_raw = getattr(message, "text", None) or ""
+    human = humanize_system_message(text_raw, _)
+
+    if hasattr(message, "user") and message.user:
+        author_id = str(message.user.id)
+        author_username = message.user.username if hasattr(message.user, "username") else author_id
+    else:
+        author_id = ""
+        author_username = _("sys_playerok") if human else "Unknown"
+
+    if author_id == account_id:
+        author = f"<i><b>🫵 {_('you')}:</b></i> "
+    elif human and not author_id:
+        author = f"<i><b>👤 {_('sys_playerok')}:</b></i> "
+    elif author_username in blacklist:
+        author = f"<i><b>🚷 {author_username}: </b></i>"
+    else:
+        author = f"<i><b>👤 {author_username}: </b></i>"
+
+    if human:
+        msg_text = escape(human)
+    elif text_raw:
+        msg_text = f"<code>{escape(text_raw)}</code>"
+    elif hasattr(message, "file") and message.file:
+        url = message.file.url if hasattr(message.file, "url") else "#"
+        msg_text = f'<a href="{url}">{_("photo")}</a>'
+    else:
+        msg_text = "[Медиа]"
+
+    return f"{author}{msg_text}\n\n"
+
 
 class NotificationTypes:
     """

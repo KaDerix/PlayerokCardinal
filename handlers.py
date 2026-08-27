@@ -27,8 +27,8 @@ def log_msg_handler(c: Cardinal, event: NewMessageEvent):
         author = message.user.username if hasattr(message.user, 'username') else str(message.user.id)
     else:
         author = "Unknown"
-    logger.info(_("log_new_msg", chat_name, chat.id))
-    logger.info(f"$MAGENTA└───> $YELLOW{author}: $CYAN{message.text or ''}")
+    logger.debug(_("log_new_msg", chat_name, chat.id))
+    logger.debug(f"$MAGENTA└───> $YELLOW{author}: $CYAN{message.text or ''}")
 
 def send_new_message_notification(c: Cardinal, event: NewMessageEvent):
     if c.telegram is None:
@@ -49,29 +49,12 @@ def send_new_message_notification(c: Cardinal, event: NewMessageEvent):
         mtext = message.text.strip().lower()
         if mtext in c.AR_CFG:
             return
-    
-    if hasattr(message, 'user') and message.user:
-        author_username = message.user.username if hasattr(message.user, 'username') else str(message.user.id)
-        author_id = str(message.user.id) if hasattr(message.user, 'id') else ""
-    else:
-        author_username = "Unknown"
-        author_id = ""
-    
-    text = ""
-    if author_id == str(c.account.id):
-        author = f"<i><b>🫵 {_('you')}:</b></i> "
-    elif author_username in c.blacklist:
-        author = f"<i><b>🚷 {author_username}: </b></i>"
-    else:
-        author = f"<i><b>👤 {author_username}: </b></i>"
-    
+
     from tg_bot import utils
-    msg_text = f"<code>{utils.escape(message.text)}</code>" if message.text else \
-        f"<a href=\"{message.file.url if hasattr(message, 'file') and message.file and hasattr(message.file, 'url') else '#'}\">" \
-        f"{_('photo')}</a>" if hasattr(message, 'file') and message.file else "[Медиа]"
-    
-    text = f"{author}{msg_text}\n\n"
-    
+    text = utils.format_chat_message_line(
+        message, str(c.account.id), c.blacklist, _
+    )
+
     from tg_bot import keyboards
     from tg_bot.utils import NotificationTypes
     kb = keyboards.reply(chat.id, chat_name, extend=True)
@@ -366,27 +349,11 @@ def auto_delivery_handler(c: Cardinal, event: NewDealEvent | ItemPaidEvent):
         playerok_automation.process_auto_disable_for_lot(c, lot_id, delivery_config)
 
 def chat_initialized_handler(c: Cardinal, event: ChatInitializedEvent):
-    chat = event.chat
-    chat_name = chat.name if hasattr(chat, 'name') else str(chat.id)
-    logger.info(f"Инициализирован чат $YELLOW{chat_name} (ID: {chat.id})$RESET")
+    pass
 
 def create_deal_keyboard(chat_id: str, username: str, deal_id: str):
-    from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B
-    from tg_bot import CBT
-    from locales.localizer import Localizer
-    
-    localizer = Localizer()
-    _ = localizer.translate
-    
-    keyboard = K()
-    keyboard.row(
-        B(_("msg_reply"), None, f"{CBT.SEND_FP_MESSAGE}:{chat_id}:{username}"),
-        B(_("msg_templates"), None, f"{CBT.TMPLT_LIST_ANS_MODE}:0:{chat_id}:{username}:0:0")
-    )
-    keyboard.row(B(_("ord_mark_sent"), None, f"{CBT.MARK_DEAL_SENT}:{deal_id}:{chat_id}"))
-    keyboard.row(B(f"🌐 {username}", url=f"https://playerok.com/chats/{chat_id}"))
-    keyboard.row(B("📋 Сделка", url=f"https://playerok.com/deals/{deal_id}/"))
-    return keyboard
+    from tg_bot import keyboards as kb
+    return kb.new_order(deal_id, username, chat_id)
 
 def send_new_deal_notification(c: Cardinal, event: NewDealEvent):
     if not c.telegram:
@@ -1252,8 +1219,6 @@ def send_bot_started_notification_handler(c: Cardinal, *args):
 
 
 def register_handlers(c: Cardinal):
-    logger.info("Регистрация обработчиков...")
-    
     if hasattr(c, 'handler_bind_var_names'):
         import handlers as handlers_module
         for var_name, handler_list in c.handler_bind_var_names.items():
@@ -1287,8 +1252,6 @@ def register_handlers(c: Cardinal):
     c.deal_has_problem_handlers.append(send_deal_has_problem_notification)
     c.deal_problem_resolved_handlers.append(send_deal_problem_resolved_notification)
     c.deal_status_changed_handlers.append(send_deal_status_changed_notification)
-    
-    logger.info("Обработчики зарегистрированы!")
 
 
 BIND_TO_POST_INIT = [send_bot_started_notification_handler]

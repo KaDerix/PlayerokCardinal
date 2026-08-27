@@ -710,10 +710,4 @@ Callback для удаления прокси.
 """
 
 MARK_DEAL_SENT = "76"
-"""Отметить сделку отправленной. CBT.MARK_DEAL_SENT:deal_id:chat_id"""
-
-AUTO_BUMP = "74"
-"""Меню авто-поднятия."""
-
-EDIT_AUTO_BUMP_INTERVAL = "75"
-"""Ввод интервала авто-поднятия."""
+"""Отметить сделку отправленной. CBT.MARK_DEAL_SENT:deal_id"""

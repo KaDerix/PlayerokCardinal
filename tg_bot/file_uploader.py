@@ -277,24 +277,35 @@ def init_uploader(cardinal: Cardinal):
             tg.bot.send_message(m.chat.id, "❌ Размер файла не должен превышать 20МБ.")
             return
 
+        import tempfile
+        tmp_path = None
         try:
             file_info = tg.bot.get_file(photo.file_id)
-            file = tg.bot.download_file(file_info.file_path)
-            image_id = cardinal.account.upload_image(file, type_="chat")
-            result = cardinal.send_message(chat_id, f"$photo={image_id}", username)
+            raw = tg.bot.download_file(file_info.file_path)
+            ext = os.path.splitext(file_info.file_path or "")[1] or ".jpg"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp.write(raw)
+                tmp_path = tmp.name
+            result = cardinal.send_message(chat_id, "", username, watermark=False, photo_paths=[tmp_path])
             if not result:
-                raise Exception("Нету сообщений")
-            tg.bot.reply_to(m, f'✅ Сообщение отправлено в переписку '
+                raise Exception("Не удалось отправить изображение")
+            tg.bot.reply_to(m, f'✅ Изображение отправлено в переписку '
                                f'<a href="https://playerok.com/chats/{chat_id}">{username}</a>.',
                             reply_markup=keyboards.reply(chat_id, username, again=True))
-        except:
-            logger.warning("Произошла ошибка при отправке изображения.")
+            logger.info(f"$CYAN📷 Фото$RESET → $YELLOW{username}$RESET (чат $YELLOW{chat_id}$RESET)")
+        except Exception:
+            logger.error("Ошибка при отправке изображения в Playerok.")
             logger.debug("TRACEBACK", exc_info=True)
-            tg.bot.reply_to(m, f'❌ Не удалось отправить сообщение в переписку '
+            tg.bot.reply_to(m, f'❌ Не удалось отправить изображение в переписку '
                                f'<a href="https://playerok.com/chats/{chat_id}">{username}</a>. '
-                               f'Подробнее в файле <code>logs/log.log</code>',
+                               f'Подробнее в <code>logs/log.log</code>',
                             reply_markup=keyboards.reply(chat_id, username, again=True))
-            return
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
 
     def upload_image(m: types.Message, type_: Literal["chat", "offer"] = "chat"):
         tg.clear_state(m.chat.id, m.from_user.id, True)
@@ -309,20 +320,29 @@ def init_uploader(cardinal: Cardinal):
 
         try:
             file_info = tg.bot.get_file(photo.file_id)
-            file = tg.bot.download_file(file_info.file_path)
-            image_id = cardinal.account.upload_image(file, type_=type_)
-        except:
-            tg.bot.reply_to(m, f'❌ Не удалось отправить выгрузить изображение. '
-                               f'Подробнее в файле <code>logs/log.log</code>')
+            raw = tg.bot.download_file(file_info.file_path)
+            ext = os.path.splitext(file_info.file_path or "")[1] or ".jpg"
+            folder = "storage/cache/images"
+            os.makedirs(folder, exist_ok=True)
+            import uuid
+            image_path = os.path.join(folder, f"{uuid.uuid4().hex}{ext}")
+            with open(image_path, "wb") as f:
+                f.write(raw)
+            image_id = image_path.replace("\\", "/")
+        except Exception:
+            logger.error("Ошибка при выгрузке изображения.")
+            logger.debug("TRACEBACK", exc_info=True)
+            tg.bot.reply_to(m, "❌ Не удалось сохранить изображение. Подробнее в <code>logs/log.log</code>")
             return
-        if type_ == "chat":
-            s = f"Используйте этот ID в текстах автовыдачи/автоответа с переменной " \
-                f"<code>$photo</code>\n\n" \
-                f"Например: <code>$photo={image_id}</code>"
-        elif type_ == "offer":
-            s = f"Используйте этот ID для добавления картинок к лотам."
-        bot.reply_to(m, f"✅ Изображение выгружено на Playerok.\n\n"
-                        f"<b>ID:</b> <code>{image_id}</code>\n\n{s}")
+
+        s = (
+            f"Используйте этот путь в текстах автовыдачи/автоответа с переменной "
+            f"<code>$photo</code>\n\n"
+            f"Например: <code>$photo={image_id}</code>"
+        )
+        bot.reply_to(m, f"✅ Изображение сохранено.\n\n"
+                        f"<b>Путь:</b> <code>{image_id}</code>\n\n{s}")
+        logger.info(f"$CYAN📷 Изображение сохранено:$RESET $YELLOW{image_id}$RESET")
 
     def upload_chat_image(m: types.Message):
         upload_image(m, type_="chat")

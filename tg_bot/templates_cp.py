@@ -58,18 +58,25 @@ def init_templates_cp(cardinal: Cardinal, *args):
         Открывает список существующих шаблонов ответов (answer_mode).
         """
         split = c.data.split(":")
-        # В PlayerokAPI node_id это UUID (строка), а не int
         offset = int(split[1])
-        node_id = str(split[2])  # UUID, не преобразуем в int
+        node_or_deal_id = str(split[2])
         prev_page = int(split[3])
         extra = split[4:] if len(split) > 4 else []
-        # Получаем username из чата
-        try:
-            chat = cardinal.account.get_chat(node_id)
-            username = chat.users[0].username if chat.users and hasattr(chat.users[0], 'username') else str(chat.users[0].id) if chat.users else ""
-        except Exception as e:
-            logger.error(f"Ошибка получения чата {node_id}: {e}")
-            username = ""
+        if prev_page == 2:
+            try:
+                _, chat_id, username = utils.resolve_deal_context(cardinal, node_or_deal_id)
+            except Exception as e:
+                logger.error(f"Ошибка получения сделки {node_or_deal_id}: {e}")
+                chat_id, username = "", ""
+            node_id = node_or_deal_id
+        else:
+            node_id = node_or_deal_id
+            try:
+                chat = cardinal.account.get_chat(node_id)
+                username = chat.users[0].username if chat.users and hasattr(chat.users[0], 'username') else str(chat.users[0].id) if chat.users else ""
+            except Exception as e:
+                logger.error(f"Ошибка получения чата {node_id}: {e}")
+                username = ""
         bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
                                       reply_markup=keyboards.templates_list_ans_mode(cardinal, offset, node_id,
                                                                                      username, prev_page, extra))
@@ -135,46 +142,54 @@ def init_templates_cp(cardinal: Cardinal, *args):
 
     def send_template(c: CallbackQuery):
         split = c.data.split(":")
-        # В PlayerokAPI node_id это UUID (строка), а не int
         template_index = int(split[1])
-        node_id = str(split[2])  # UUID, не преобразуем в int
+        node_or_deal_id = str(split[2])
         prev_page = int(split[3])
         extra = split[4:] if len(split) > 4 else []
-        # Получаем username из чата
-        try:
-            chat = cardinal.account.get_chat(node_id)
-            username = chat.users[0].username if chat.users and hasattr(chat.users[0], 'username') else str(chat.users[0].id) if chat.users else ""
-        except Exception as e:
-            logger.error(f"Ошибка получения чата {node_id}: {e}")
-            username = ""
+        if prev_page == 2:
+            try:
+                deal_id, chat_id, username = utils.resolve_deal_context(cardinal, node_or_deal_id)
+            except Exception as e:
+                logger.error(f"Ошибка получения сделки {node_or_deal_id}: {e}")
+                deal_id, chat_id, username = node_or_deal_id, "", ""
+            send_node_id = chat_id
+        else:
+            send_node_id = node_or_deal_id
+            try:
+                chat = cardinal.account.get_chat(send_node_id)
+                username = chat.users[0].username if chat.users and hasattr(chat.users[0], 'username') else str(chat.users[0].id) if chat.users else ""
+            except Exception as e:
+                logger.error(f"Ошибка получения чата {send_node_id}: {e}")
+                username = ""
+            deal_id = None
 
         if template_index > len(tg.answer_templates) - 1:
             bot.send_message(c.message.chat.id, _("tmplt_not_found_err", template_index),
                              message_thread_id=c.message.message_thread_id)
             if prev_page == 0:
                 bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
-                                              reply_markup=keyboards.reply(node_id, username))
+                                              reply_markup=keyboards.reply(send_node_id, username))
             elif prev_page == 1:
                 bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
-                                              reply_markup=keyboards.reply(node_id, username, True))
-            elif prev_page == 2:
+                                              reply_markup=keyboards.reply(send_node_id, username, True))
+            elif prev_page == 2 and deal_id:
                 bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
-                                              reply_markup=keyboards.new_order(extra[0], username, node_id,
-                                                                               no_refund=bool(int(extra[1]))))
+                                              reply_markup=keyboards.new_order(deal_id, username, send_node_id,
+                                                                               no_refund=bool(int(extra[0])) if extra else False))
             bot.answer_callback_query(c.id)
             return
 
         text = tg.answer_templates[template_index].replace("$username", safe_text(username))
-        result = cardinal.send_message(node_id, text, username)
+        result = cardinal.send_message(send_node_id, text, username)
 
         if prev_page == 3:
             bot.answer_callback_query(c.id, _("msg_sent_short") if result else _("msg_sending_error_short"))
             return
         else:
-            msg_text = _("tmplt_msg_sent", node_id, username, utils.escape(text)) if result else \
-                _("msg_sending_error", node_id, username)
+            msg_text = _("tmplt_msg_sent", send_node_id, username, utils.escape(text)) if result else \
+                _("msg_sending_error", send_node_id, username)
             bot.send_message(c.message.chat.id, msg_text,
-                             reply_markup=keyboards.reply(node_id, username, again=True, extend=True),
+                             reply_markup=keyboards.reply(send_node_id, username, again=True, extend=True),
                              message_thread_id=c.message.message_thread_id)
         bot.answer_callback_query(c.id)
 

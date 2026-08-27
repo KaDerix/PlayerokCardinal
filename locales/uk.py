@@ -34,7 +34,6 @@ mm_authorized_users = "👥 Авторизовані користувачі"
 mm_proxy = "🌐 Проксі"
 
 # Глобальні перемикачі
-gs_autoraise = "{} Автопідняття"
 gs_autoresponse = "{} Автовідповідач"
 gs_autodelivery = "{} Авто-видача"
 gs_nultidelivery = "{} Мульти-видача"
@@ -53,7 +52,6 @@ ns_order_confirmed = "{} Замовлення підтверджено"
 ns_lot_activate = "{} Відновлення лота"
 ns_lot_deactivate = "{} Деактивація лота"
 ns_delivery = "{} Видача товару"
-ns_raise = "{} Підняття лотів"
 ns_new_review = "{} Залишений відгук"
 ns_bot_start = "{} Запуск бота"
 ns_other = "{} Інше (плагіни)"
@@ -127,13 +125,17 @@ oc_send_reply = "{} Відправляти повідомлення"
 oc_edit_message = "✏️ Змінити текст повідомлення"
 
 or_edit_reply = "✏️ {}★ відгук"
-mm_auto_bump = "⬆️ Авто-підняття"
-ab_enabled = "{} Авто-підняття"
-ab_interval = "⏱ Інтервал: {} сек"
-ab_edit_interval = "⏱ Змінити інтервал"
-ab_all_items = "{} Усі товари"
-desc_ab = "Налаштування авто-підняття.\n\nІнтервал: <code>{}</code> сек\nОстанній запуск: <code>{}</code>"
-ord_mark_sent = "✅ Позначити відправленим"
+
+sys_playerok = "Playerok"
+sys_msg_item_paid = "Замовлення оплачено"
+sys_msg_item_sent = "Товар відправлено"
+sys_msg_deal_confirmed = "Угоду підтверджено"
+sys_msg_deal_confirmed_auto = "Угоду підтверджено автоматично"
+sys_msg_deal_rolled_back = "Повернення за угодою"
+sys_msg_deal_has_problem = "Проблема з угодою"
+sys_msg_deal_problem_resolved = "Проблему з угодою вирішено"
+
+ord_mark_sent = "✅ Виконати замовлення"
 
 # Налаштування виду сповіщень про нові повідомлення
 mv_incl_my_msg = "{} Відображати мої повідомлення"
@@ -438,7 +440,6 @@ adv_poc = "😎 Playerok Cardinal (POC) - найкращий бот для Playe
 adv_description = """🐦 𝑷𝒍𝒂𝒚𝒆𝒓𝒐𝒌 𝑪𝒂𝒓𝒅𝒊𝒏𝒂𝒍 v{}🐦
 
 🤖 Автовидача товарів
-🚀 Автопідняття лотів
 💬 Автовідповідь на заготовлені команди
 🔄 Автовідновлення лотів після продажу
 📦 Автодеактивація лотів, якщо товари закінчилися
@@ -638,11 +639,6 @@ crd_profile_get_unexpected_err = "Сталася непередбачена по
 crd_profile_get_too_many_attempts_err = "Сталася помилка при отриманні даних про лоти та категорії: перевищено кількість спроб ({})."
 crd_profile_updated = "Оновлено інформацію про лоти $YELLOW({})$RESET та категорії $YELLOW({})$RESET профілю."
 crd_tg_profile_updated = "Оновлено інформацію про лоти $YELLOW({})$RESET та категорії $YELLOW({})$RESET профілю (TG ПУ)."
-crd_raise_time_err = 'Не вдалося підняти лоти категорії $CYAN\"{}\"$RESET. Playerok каже: "{}". Наступна спроба через {}.'
-crd_raise_unexpected_err = "Сталася непередбачена помилка при спробі підняти лоти категорії $CYAN\"{}\"$RESET. Пауза на 10 секунд..."
-crd_raise_status_code_err = "Помилка {} при піднятті лотів категорії $CYAN\"{}\"$RESET. Пауза на 1 хв..."
-crd_lots_raised = "Всі лоти категорії $CYAN\"{}\"$RESET піднято!"
-crd_raise_wait_3600 = "Наступна спроба через {}."
 crd_msg_send_err = "Сталася помилка при відправленні повідомлення в чат $YELLOW{}$RESET."
 crd_msg_attempts_left = "Залишилося спроб: $YELLOW{}$RESET."
 crd_msg_no_more_attempts_err = "Не вдалося відправити повідомлення в чат $YELLOW{}$RESET: перевищено кількість спроб."
@@ -651,8 +647,6 @@ crd_session_timeout_err = "Не вдалося оновити сесію: пер
 crd_session_unexpected_err = "Сталася непередбачена помилка при оновленні сесії."
 crd_session_no_more_attempts_err = "Не вдалося оновити сесію: перевищено кількість спроб."
 crd_session_updated = "Сесія оновлена."
-crd_raise_loop_started = "$CYANЦикл автопідняття лотів запущено (це не означає, що автопідняття лотів увімкнено)."
-crd_raise_loop_not_started = "$CYANЦикл автопідняття не був запущений, оскільки на обліковому записі не виявлено лотів."
 crd_session_loop_started = "$CYANЦикл оновлення сесії запущено."
 crd_no_plugins_folder = "Папка з плагінами не виявлена."
 crd_no_plugins = "Плагіни не виявлені."

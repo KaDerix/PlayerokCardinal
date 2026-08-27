@@ -40,10 +40,8 @@ def _apply_telegram_proxy(cardinal: Cardinal) -> str | None:
     proxy = cardinal_tools.resolve_telegram_proxy(cardinal.MAIN_CFG)
     if proxy:
         telebot.apihelper.proxy = {"https": proxy, "http": proxy}
-        logger.info("Telegram proxy: %s", proxy.split("@")[-1] if "@" in proxy else proxy)
     else:
         telebot.apihelper.proxy = None
-        logger.warning("Telegram proxy не задан — api.telegram.org может быть недоступен с сервера")
     return proxy
 
 
@@ -284,14 +282,11 @@ class TGBot:
         """
         bot_instance = self.bot
         handler_name = getattr(handler, "__name__", str(handler))
-        logger.debug(f"Регистрация callback handler: {handler_name}")
 
         @bot_instance.callback_query_handler(func, **kwargs)
         def run_handler(call: CallbackQuery):
             try:
-                logger.debug(f"Callback получен: {call.data}, обработчик: {handler_name}")
                 handler(call)
-                logger.debug(f"Callback обработан успешно: {call.data}")
             except Exception as e:
                 logger.error(_("log_tg_handler_error") + f" (handler: {handler_name}, data: {call.data})")
                 logger.debug("TRACEBACK", exc_info=True)
@@ -982,12 +977,11 @@ class TGBot:
         self.bot.reply_to(m, _("review_reply_changed", stars), reply_markup=keyboard)
 
     def mark_deal_sent(self, c: CallbackQuery):
-        split = c.data.split(":")
-        deal_id, chat_id = split[1], split[2]
+        deal_id = c.data.split(":")[1]
         try:
             from PlayerokAPI.enums import ItemDealStatuses
             self.cardinal.account.update_deal(deal_id, ItemDealStatuses.SENT)
-            self.bot.answer_callback_query(c.id, "✅ Сделка отмечена отправленной")
+            self.bot.answer_callback_query(c.id, "✅ Заказ выполнен")
         except Exception as e:
             logger.error(f"mark_deal_sent {deal_id}: {e}")
             self.bot.answer_callback_query(c.id, _("msg_sending_error_short"), show_alert=True)
@@ -1035,32 +1029,9 @@ class TGBot:
         # В PlayerokAPI Chat не имеет messages напрямую, получаем через API
         if messages:
             for msg in messages[-10:]:
-                # Получаем автора сообщения
-                if hasattr(msg, 'user') and msg.user:
-                    author_username = msg.user.username if hasattr(msg.user, 'username') else str(msg.user.id)
-                    author_id = str(msg.user.id)
-                else:
-                    author_username = "Unknown"
-                    author_id = ""
-                
-                # Определяем, от кого сообщение
-                if author_id == str(self.cardinal.account.id):
-                    author = f"<i><b>🫵 {_('you')}:</b></i> "
-                elif author_username in self.cardinal.blacklist:
-                    author = f"<i><b>🚷 {author_username}: </b></i>"
-                else:
-                    author = f"<i><b>👤 {author_username}: </b></i>"
-                
-                # Формируем текст сообщения
-                msg_text = ""
-                if msg.text:
-                    msg_text = f"<code>{utils.escape(msg.text)}</code>"
-                elif hasattr(msg, 'file') and msg.file:
-                    msg_text = f"<a href=\"{msg.file.url if hasattr(msg.file, 'url') else '#'}\">{_('photo')}</a>"
-                else:
-                    msg_text = "[Медиа]"
-                
-                text += f"{author}{msg_text}\n\n"
+                text += utils.format_chat_message_line(
+                    msg, str(self.cardinal.account.id), self.cardinal.blacklist, _
+                )
         else:
             text += "<i>Сообщений не найдено</i>"
 
@@ -1084,16 +1055,13 @@ class TGBot:
         """
         Просит подтвердить возврат денег.
         """
-        split = call.data.split(":")
-        order_id, node_id = split[1], str(split[2])  # node_id это UUID (строка)
-        # Получаем username из чата
+        deal_id = call.data.split(":")[1]
         try:
-            chat = self.cardinal.account.get_chat(node_id)
-            username = chat.users[0].username if chat.users and hasattr(chat.users[0], 'username') else str(chat.users[0].id) if chat.users else ""
+            _, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
         except Exception as e:
-            logger.error(f"Ошибка получения чата {node_id}: {e}")
-            username = ""
-        keyboard = kb.new_order(order_id, username, node_id, confirmation=True)
+            logger.error(f"Ошибка получения сделки {deal_id}: {e}")
+            node_id, username = "", ""
+        keyboard = kb.new_order(deal_id, username, node_id, confirmation=True)
         self.bot.edit_message_reply_markup(call.message.chat.id, call.message.id, reply_markup=keyboard)
         self.bot.answer_callback_query(call.id)
 
@@ -1101,16 +1069,13 @@ class TGBot:
         """
         Отменяет возврат.
         """
-        split = call.data.split(":")
-        order_id, node_id = split[1], str(split[2])  # node_id это UUID (строка)
-        # Получаем username из чата
+        deal_id = call.data.split(":")[1]
         try:
-            chat = self.cardinal.account.get_chat(node_id)
-            username = chat.users[0].username if chat.users and hasattr(chat.users[0], 'username') else str(chat.users[0].id) if chat.users else ""
+            _, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
         except Exception as e:
-            logger.error(f"Ошибка получения чата {node_id}: {e}")
-            username = ""
-        keyboard = kb.new_order(order_id, username, node_id)
+            logger.error(f"Ошибка получения сделки {deal_id}: {e}")
+            node_id, username = "", ""
+        keyboard = kb.new_order(deal_id, username, node_id)
         self.bot.edit_message_reply_markup(call.message.chat.id, call.message.id, reply_markup=keyboard)
         self.bot.answer_callback_query(call.id)
 
@@ -1118,62 +1083,56 @@ class TGBot:
         """
         Оформляет возврат за заказ.
         """
-        split = c.data.split(":")
-        order_id, node_id = split[1], str(split[2])  # node_id это UUID (строка)
-        # Получаем username из чата
+        deal_id = c.data.split(":")[1]
         try:
-            chat = self.cardinal.account.get_chat(node_id)
-            username = chat.users[0].username if chat.users and hasattr(chat.users[0], 'username') else str(chat.users[0].id) if chat.users else ""
+            _, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
         except Exception as e:
-            logger.error(f"Ошибка получения чата {node_id}: {e}")
-            username = ""
+            logger.error(f"Ошибка получения сделки {deal_id}: {e}")
+            node_id, username = "", ""
         new_msg = None
         attempts = 3
         while attempts:
             try:
                 # В PlayerokAPI используется update_deal вместо refund
                 from PlayerokAPI import enums
-                self.cardinal.account.update_deal(order_id, enums.ItemDealStatuses.ROLLED_BACK)
+                self.cardinal.account.update_deal(deal_id, enums.ItemDealStatuses.ROLLED_BACK)
                 break
             except:
                 if not new_msg:
-                    new_msg = self.bot.send_message(c.message.chat.id, _("refund_attempt", order_id, attempts))
+                    new_msg = self.bot.send_message(c.message.chat.id, _("refund_attempt", deal_id, attempts))
                 else:
-                    self.bot.edit_message_text(_("refund_attempt", order_id, attempts), new_msg.chat.id, new_msg.id)
+                    self.bot.edit_message_text(_("refund_attempt", deal_id, attempts), new_msg.chat.id, new_msg.id)
                 attempts -= 1
                 time.sleep(1)
 
         else:
-            self.bot.edit_message_text(_("refund_error", order_id), new_msg.chat.id, new_msg.id)
+            self.bot.edit_message_text(_("refund_error", deal_id), new_msg.chat.id, new_msg.id)
 
-            keyboard = kb.new_order(order_id, username, node_id)
+            keyboard = kb.new_order(deal_id, username, node_id)
             self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id, reply_markup=keyboard)
             self.bot.answer_callback_query(c.id)
             return
 
         if not new_msg:
-            self.bot.send_message(c.message.chat.id, _("refund_complete", order_id))
+            self.bot.send_message(c.message.chat.id, _("refund_complete", deal_id))
         else:
-            self.bot.edit_message_text(_("refund_complete", order_id), new_msg.chat.id, new_msg.id)
+            self.bot.edit_message_text(_("refund_complete", deal_id), new_msg.chat.id, new_msg.id)
 
-        keyboard = kb.new_order(order_id, username, node_id, no_refund=True)
+        keyboard = kb.new_order(deal_id, username, node_id, no_refund=True)
         self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id, reply_markup=keyboard)
         self.bot.answer_callback_query(c.id)
 
     def open_order_menu(self, c: CallbackQuery):
         split = c.data.split(":")
-        node_id = str(split[1])  # UUID (строка)
-        order_id = split[2] if len(split) > 2 else ""
-        no_refund = bool(int(split[3])) if len(split) > 3 else False
-        # Получаем username из чата
+        deal_id = split[1]
+        no_refund = bool(int(split[2])) if len(split) > 2 else False
         try:
-            chat = self.cardinal.account.get_chat(node_id)
-            username = chat.users[0].username if chat.users and hasattr(chat.users[0], 'username') else str(chat.users[0].id) if chat.users else ""
+            _, node_id, username = utils.resolve_deal_context(self.cardinal, deal_id)
         except Exception as e:
-            logger.error(f"Ошибка получения чата {node_id}: {e}")
-            username = ""
+            logger.error(f"Ошибка получения сделки {deal_id}: {e}")
+            node_id, username = "", ""
         self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
-                                           reply_markup=kb.new_order(order_id, username, node_id, no_refund=no_refund))
+                                           reply_markup=kb.new_order(deal_id, username, node_id, no_refund=no_refund))
 
     # Панель управления
     def open_cp(self, c: CallbackQuery):
@@ -1206,21 +1165,6 @@ class TGBot:
         """
         split = c.data.split(":")
         section, option = split[1], split[2]
-
-        if section == "AutoBump":
-            cfg = self.cardinal.auto_bump_cfg
-            if option == "enabled":
-                cfg["enabled"] = not cfg.get("enabled", False)
-                self.cardinal.MAIN_CFG.setdefault("Playerok", {})["autoRaise"] = "1" if cfg["enabled"] else "0"
-                cardinal_tools.save_json_config("configs/auto_bump.json", cfg)
-                self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
-            elif option == "all":
-                cfg["all"] = not cfg.get("all", False)
-                cardinal_tools.save_json_config("configs/auto_bump.json", cfg)
-            self.bot.edit_message_reply_markup(c.message.chat.id, c.message.id,
-                                               reply_markup=kb.auto_bump_settings(self.cardinal))
-            self.bot.answer_callback_query(c.id)
-            return
 
         if (section == "FunPay" or section == "Playerok") and option == "oldMsgGetMode":
             self.cardinal.switch_msg_get_mode()
@@ -1312,9 +1256,6 @@ class TGBot:
             "oc": (_("desc_oc", utils.escape(self.cardinal.MAIN_CFG.get('OrderConfirm', {}).get('replyText', ''))),
                    kb.order_confirm_reply_settings, [self.cardinal]),
             "or": (_("desc_or"), kb.review_reply_settings, [self.cardinal]),
-            "ab": (_("desc_ab", self.cardinal.auto_bump_cfg.get("interval", 3600),
-                    self.cardinal.auto_bump_cfg.get("last_time") or "—"),
-                   kb.auto_bump_settings, [self.cardinal]),
         }
 
         curr = sections[section]
@@ -1585,7 +1526,6 @@ class TGBot:
         self.__register_handlers()
         self.setup_commands()
         self.edit_bot()
-        logger.info(_("log_tg_initialized"))
 
     def run(self):
         """
@@ -1595,8 +1535,7 @@ class TGBot:
         k_err = 0
         while True:
             try:
-                logger.info(_("log_tg_started", self.bot.user.username))
-                self.bot.infinity_polling(logger_level=logging.DEBUG)
+                self.bot.infinity_polling(logger_level=logging.ERROR)
             except:
                 k_err += 1
                 logger.error(_("log_tg_update_error", k_err))

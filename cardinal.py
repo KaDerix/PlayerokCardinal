@@ -146,7 +146,6 @@ class Cardinal(object):
         
         pk = self.MAIN_CFG["Playerok"]
         cardinal_tools.ensure_automation_configs()
-        self.auto_bump_cfg = cardinal_tools.load_json_config("configs/auto_bump.json", cardinal_tools.DEFAULT_AUTO_BUMP)
         self.auto_complete_cfg = cardinal_tools.load_json_config(
             "configs/auto_complete.json", cardinal_tools.DEFAULT_AUTO_COMPLETE
         )
@@ -154,12 +153,6 @@ class Cardinal(object):
             "configs/auto_withdrawal.json", cardinal_tools.DEFAULT_AUTO_WITHDRAWAL
         )
         self._init_handlers_and_plugins()
-        logger.info(
-            f"⚙️ Настройки: autoResponse={self.autoresponse_enabled}, autoDelivery={self.autodelivery_enabled}, "
-            f"autoRestore={self.autorestore_enabled}, autoRaise={self.autoraise_enabled}, "
-            f"multiDelivery={self.multidelivery_enabled}, autoDisable={self.autodisable_enabled}, "
-            f"autoComplete={self.autocomplete_enabled}, autoWithdrawal={self.autowithdrawal_enabled}"
-        )
 
     def _pk_flag(self, key: str) -> bool:
         return self.MAIN_CFG.get("Playerok", {}).get(key, "0") == "1"
@@ -175,10 +168,6 @@ class Cardinal(object):
     @property
     def autorestore_enabled(self) -> bool:
         return self._pk_flag("autoRestore")
-
-    @property
-    def autoraise_enabled(self) -> bool:
-        return self._pk_flag("autoRaise")
 
     @property
     def multidelivery_enabled(self) -> bool:
@@ -304,8 +293,7 @@ class Cardinal(object):
                 self.balance = self.get_balance()
                 greeting_text = cardinal_tools.create_greeting_text(self)
                 cardinal_tools.set_console_title(f"Playerok Cardinal - {profile.username} ({profile.id})")
-                for line in greeting_text.split("\n"):
-                    logger.info(line)
+                print(greeting_text)
                 break
             except TimeoutError:
                 logger.error(_("crd_acc_get_timeout_err"))
@@ -335,9 +323,9 @@ class Cardinal(object):
         if self.MAIN_CFG["Telegram"].get("enabled") == "1":
             self.__init_telegram()
             try:
-                from tg_bot import auto_response_cp, auto_delivery_cp, auto_bump_cp, config_loader_cp, templates_cp, plugins_cp, \
+                from tg_bot import auto_response_cp, auto_delivery_cp, config_loader_cp, templates_cp, plugins_cp, \
                                    file_uploader, authorized_users_cp, proxy_cp, default_cp
-                for module in [auto_response_cp, auto_delivery_cp, auto_bump_cp, config_loader_cp, templates_cp, plugins_cp,
+                for module in [auto_response_cp, auto_delivery_cp, config_loader_cp, templates_cp, plugins_cp,
                                file_uploader, authorized_users_cp, proxy_cp, default_cp]:
                     try:
                         self.add_handlers_from_plugin(module)
@@ -413,13 +401,9 @@ class Cardinal(object):
                 break
             
             event_type = event.type
-            logger.info(f"📨 Получено событие: {event_type}")
             if event_type in events_handlers:
-                logger.info(f"📋 Обработка события {event_type}, обработчиков: {len(events_handlers[event_type])}")
                 for handler in events_handlers[event_type]:
                     try:
-                        handler_name = handler.__name__ if hasattr(handler, '__name__') else str(handler)
-                        logger.info(f"🔧 Вызов обработчика: {handler_name}")
                         handler(self, event)
                     except Exception as e:
                         logger.error(f"Ошибка в обработчике события {event_type}: {e}")
@@ -432,10 +416,8 @@ class Cardinal(object):
             return
         self._automation_threads_started = True
         from Utils import playerok_automation
-        Thread(target=playerok_automation.bump_items_loop, args=(self,), daemon=True).start()
         Thread(target=playerok_automation.withdrawal_loop, args=(self,), daemon=True).start()
         Thread(target=playerok_automation.auto_disable_loop, args=(self,), daemon=True).start()
-        logger.info("Фоновые потоки автоматизации запущены")
 
     def run(self):
         self.run_id += 1
@@ -503,25 +485,43 @@ class Cardinal(object):
             with open(path, "w", encoding="utf-8") as f:
                 config.write(f)
 
-    def send_message(self, chat_id: str | int, text: str, chat_name: str = "", watermark: bool = True):
+    def send_message(self, chat_id: str | int, text: str, chat_name: str = "", watermark: bool = True,
+                     photo_paths: list[str] | None = None):
         """
-        Отправляет сообщение в чат
-        
-        :param chat_id: ID чата
-        :param text: текст сообщения
-        :param chat_name: название чата (необязательно)
-        :param watermark: добавлять ли водяной знак в начало сообщения? (по умолчанию True)
+        Отправляет сообщение (и/или фото) в чат Playerok.
         """
         try:
             chat_id_str = str(chat_id)
-            if watermark and self.MAIN_CFG.get("Other", {}).get("watermark") and not text.strip().startswith("$photo="):
+            keep_unread = self.keep_sent_messages_unread
+            mark_chat_as_read = not keep_unread
+
+            # $photo=path — локальный файл
+            if text and text.strip().startswith("$photo="):
+                photo_path = text.strip()[7:].strip()
+                if os.path.isfile(photo_path):
+                    self.account.send_message(
+                        chat_id_str,
+                        photo_file_paths=[photo_path],
+                        mark_chat_as_read=mark_chat_as_read,
+                    )
+                    return True
+                logger.error(f"Файл фото не найден: {photo_path}")
+                return False
+
+            if photo_paths:
+                self.account.send_message(
+                    chat_id_str,
+                    text=text or None,
+                    photo_file_paths=list(photo_paths),
+                    mark_chat_as_read=mark_chat_as_read,
+                )
+                return True
+
+            if watermark and self.MAIN_CFG.get("Other", {}).get("watermark") and text:
                 watermark_text = self.MAIN_CFG.get("Other", {}).get("watermark", "")
                 if watermark_text:
                     text = f"{watermark_text}\n{text}"
-            
-            keep_unread = self.keep_sent_messages_unread
-            mark_chat_as_read = not keep_unread
-            
+
             self.account.send_message(chat_id_str, text, mark_chat_as_read=mark_chat_as_read)
             return True
         except Exception as e:
@@ -599,7 +599,6 @@ class Cardinal(object):
             return
         plugins = [file for file in os.listdir("plugins") if file.endswith(".py") and file != "__init__.py"]
         if not plugins:
-            logger.info(_("crd_no_plugins"))
             return
 
         sys.path.append("plugins")
@@ -629,7 +628,6 @@ class Cardinal(object):
             )
 
             self.plugins[data["UUID"]] = plugin_data
-            logger.info(f"Плагин загружен: {data['NAME']} v{data['VERSION']} ({file})")
 
     def add_handlers_from_plugin(self, plugin, uuid: str | None = None):
         """
@@ -638,8 +636,6 @@ class Cardinal(object):
         :param plugin: модуль (плагин).
         :param uuid: UUID плагина (None для встроенных хэндлеров).
         """
-        plugin_name = getattr(plugin, "__name__", str(plugin))
-        handlers_count = 0
         for name in self.handler_bind_var_names:
             try:
                 functions = getattr(plugin, name)
@@ -647,15 +643,9 @@ class Cardinal(object):
                     for func in functions:
                         func.plugin_uuid = uuid
                     self.handler_bind_var_names[name].extend(functions)
-                    handlers_count += len(functions)
             except AttributeError:
                 continue
-        from locales.localizer import Localizer
-        language = self.MAIN_CFG.get("Other", {}).get("language", "ru")
-        localizer = Localizer(language)
-        _ = localizer.translate
-        if handlers_count > 0:
-            logger.info(_("crd_handlers_registered", plugin.__name__) + f" ({handlers_count} обработчиков)")
+
     def add_handlers(self):
         """
         Регистрирует хэндлеры из всех плагинов.
@@ -685,9 +675,6 @@ class Cardinal(object):
         cardinal_tools.cache_pinned_plugins(self.pinned_plugins)
 
     def reload_automation_cfg(self):
-        self.auto_bump_cfg = cardinal_tools.load_json_config(
-            "configs/auto_bump.json", cardinal_tools.DEFAULT_AUTO_BUMP
-        )
         self.auto_complete_cfg = cardinal_tools.load_json_config(
             "configs/auto_complete.json", cardinal_tools.DEFAULT_AUTO_COMPLETE
         )

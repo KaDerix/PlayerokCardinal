@@ -263,15 +263,6 @@ def load_pinned_plugins() -> list[str]:
             return []
 
 
-DEFAULT_AUTO_BUMP = {
-    "enabled": False,
-    "interval": 3600,
-    "last_time": "",
-    "all": False,
-    "included": [],
-    "excluded": [],
-}
-
 DEFAULT_AUTO_COMPLETE = {
     "enabled": False,
     "all": True,
@@ -355,7 +346,6 @@ def save_json_config(path: str, data: dict) -> None:
 
 
 def ensure_automation_configs() -> None:
-    save_json_config("configs/auto_bump.json", load_json_config("configs/auto_bump.json", DEFAULT_AUTO_BUMP))
     save_json_config("configs/auto_complete.json", load_json_config("configs/auto_complete.json", DEFAULT_AUTO_COMPLETE))
     save_json_config(
         "configs/auto_withdrawal.json",
@@ -455,19 +445,19 @@ def load_old_users(greetings_cooldown: float) -> dict[int, float]:
     return users
 
 
-def load_greeting_cache() -> dict[int, float]:
+def load_greeting_cache() -> dict[str, float]:
     path = "storage/cache/greeted_chats.json"
     if not os.path.exists(path):
         return {}
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.loads(f.read())
-        return {int(k): float(v) for k, v in data.items()}
+        return {str(k): float(v) for k, v in data.items()}
     except (json.JSONDecodeError, ValueError, TypeError):
         return {}
 
 
-def save_greeting_cache(cache: dict[int, float]) -> None:
+def save_greeting_cache(cache: dict[str, float]) -> None:
     if not os.path.exists("storage/cache"):
         os.makedirs("storage/cache")
     with open("storage/cache/greeted_chats.json", "w", encoding="utf-8") as f:
@@ -483,7 +473,7 @@ def should_skip_deal_greeting(chat_id: int | str, greetings_cfg: dict) -> bool:
     if not only_new and cooldown_days <= 0:
         return False
     cache = load_greeting_cache()
-    last = cache.get(int(chat_id))
+    last = cache.get(str(chat_id))
     if last is None:
         return False
     if only_new:
@@ -493,55 +483,56 @@ def should_skip_deal_greeting(chat_id: int | str, greetings_cfg: dict) -> bool:
 
 def mark_deal_greeting_sent(chat_id: int | str) -> None:
     cache = load_greeting_cache()
-    cache[int(chat_id)] = time.time()
+    cache[str(chat_id)] = time.time()
     save_greeting_cache(cache)
 
 
+def _time_greeting() -> str:
+    hour = datetime.now().hour
+    if hour < 4:
+        return "🌙 Доброй ночи"
+    if hour < 12:
+        return "🌅 Доброе утро"
+    if hour < 17:
+        return "☀️ Добрый день"
+    return "🌆 Добрый вечер"
+
+
 def create_greeting_text(cardinal: Cardinal) -> str:
-    """
-    Генерирует приветствие для вывода в консоль после загрузки данных о пользователе.
-    """
+    """Приветствие в консоли после авторизации на Playerok."""
+    from colorama import Fore, Style
+
     account = cardinal.account
     balance = cardinal.balance
-    current_time = datetime.now()
-    if current_time.hour < 4:
-        greetings = "Какая прекрасная ночь"  # locale
-    elif current_time.hour < 12:
-        greetings = "Доброе утро"
-    elif current_time.hour < 17:
-        greetings = "Добрый день"
-    else:
-        greetings = "Добрый вечер"
+    W, C, Y, G, R = Fore.WHITE + Style.DIM, Fore.CYAN + Style.BRIGHT, Fore.YELLOW, Fore.GREEN, Style.RESET_ALL
 
-    # Получаем активные сделки
     active_sales = 0
     try:
-        if hasattr(account, 'profile') and account.profile and hasattr(account.profile, 'stats'):
-            if hasattr(account.profile.stats, 'deals') and account.profile.stats.deals:
-                if hasattr(account.profile.stats.deals, 'incoming') and account.profile.stats.deals.incoming:
-                    active_sales = getattr(account.profile.stats.deals.incoming, 'total', 0)
-    except:
+        profile = getattr(account, "profile", None)
+        stats = getattr(profile, "stats", None) if profile else None
+        deals = getattr(stats, "deals", None) if stats else None
+        incoming = getattr(deals, "incoming", None) if deals else None
+        if incoming:
+            active_sales = getattr(incoming, "total", 0) or 0
+    except Exception:
         pass
-    
-    # Форматируем баланс (баланс уже в рублях, не делим на 100)
-    balance_rub = balance.value if balance.value else 0
-    
-    lines = [
-        f"* {greetings}, $CYAN{account.username}.",
-        f"* Ваш ID: $YELLOW{account.id}.",
-        f"* Ваш текущий баланс: $CYAN{balance_rub:.2f} RUB",
-        f"* Текущие незавершенные сделки: $YELLOW{active_sales}.",
-        f"* Удачной торговли!"
-    ]
 
-    length = 60
-    greetings_text = f"\n{'-' * length}\n"
-    for line in lines:
-        greetings_text += line + " " * (length - len(
-            line.replace("$CYAN", "").replace("$YELLOW", "").replace("$MAGENTA", "").replace("$RESET",
-                                                                                             "")) - 1) + "$RESET*\n"
-    greetings_text += f"{'-' * length}\n"
-    return greetings_text
+    balance_rub = balance.value if balance.value else 0
+    greeting = _time_greeting()
+    username = account.username
+    user_id = account.id
+
+    return (
+        f"\n{W}╭────────────────────────────────────────────────────╮{R}\n"
+        f"{W}│{R}  {greeting}, {C}{username}{R}\n"
+        f"{W}│{R}\n"
+        f"{W}│{R}  {W}ID{R}      {Y}{user_id}{R}\n"
+        f"{W}│{R}  {W}Баланс{R}  {C}{balance_rub:.2f} ₽{R}\n"
+        f"{W}│{R}  {W}Сделки{R}  {Y}{active_sales}{R} в работе\n"
+        f"{W}│{R}\n"
+        f"{W}│{R}  {G}Удачной торговли!{R}\n"
+        f"{W}╰────────────────────────────────────────────────────╯{R}\n"
+    )
 
 
 def time_to_str(time_: int):
@@ -689,6 +680,17 @@ def format_msg_text(text: str, obj: PlayerokAPI.types.ChatMessage | PlayerokAPI.
     return text
 
 
+def format_deal_props(props) -> str:
+    if not props:
+        return ""
+    if isinstance(props, str):
+        return props
+    period = getattr(props, "auto_confirm_period", None)
+    if period is not None:
+        return f"Авто-подтверждение: {period} дн."
+    return str(props)
+
+
 def format_order_text(text: str, order: PlayerokAPI.types.ItemDeal) -> str:
     """
     Форматирует текст, подставляя значения переменных, доступных для Order.
@@ -715,7 +717,7 @@ def format_order_text(text: str, order: PlayerokAPI.types.ItemDeal) -> str:
         logger.warning("Произошла ошибка при парсинге игры из заказа")  # locale
         logger.debug("TRACEBACK", exc_info=True)
     description = order.item.name if hasattr(order.item, 'name') else ""
-    params = order.props if hasattr(order, 'props') and order.props else ""
+    params = format_deal_props(order.props if hasattr(order, 'props') else "")
     # В PlayerokAPI для ItemDeal используется user (покупатель/продавец сделки)
     if hasattr(order, 'user') and order.user:
         username = order.user.username if hasattr(order.user, 'username') else str(order.user.id)
@@ -733,7 +735,7 @@ def format_order_text(text: str, order: PlayerokAPI.types.ItemDeal) -> str:
         "$order_desc": description,
         "$order_title": description,
         "$order_params": params,
-        "$order_id": order.id,
+        "$order_id": str(order.id),
         "$order_link": f"https://playerok.com/deals/{order.id}/",
         "$category_fullname": subcategory_fullname,
         "$category": subcategory,
@@ -741,7 +743,7 @@ def format_order_text(text: str, order: PlayerokAPI.types.ItemDeal) -> str:
     }
 
     for var in variables:
-        text = text.replace(var, variables[var])
+        text = text.replace(var, str(variables[var]))
     return text
 
 
