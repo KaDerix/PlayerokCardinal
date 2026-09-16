@@ -200,6 +200,15 @@ def new_deal_welcome_handler(c: Cardinal, event: NewDealEvent):
     if cardinal_tools.should_skip_deal_greeting(chat.id, greetings_cfg):
         return
 
+    if c.autodelivery_enabled:
+        lot_id = None
+        item_name = ""
+        if hasattr(deal, "item") and deal.item:
+            lot_id = str(getattr(deal.item, "id", None) or getattr(deal.item, "lot_id", None) or "") or None
+            item_name = getattr(deal.item, "name", None) or ""
+        if _find_delivery_config(c, lot_id, item_name):
+            return
+
     text = greetings_cfg.get("greetingsText", "").strip()
     if not text:
         item_name = _deal_item_name(deal)
@@ -207,8 +216,7 @@ def new_deal_welcome_handler(c: Cardinal, event: NewDealEvent):
         text = _("new_deal_chat_message", item_name, f"{price_rub:.2f}")
     text = cardinal_tools.format_order_text(text, deal)
     buyer = _deal_buyer_username(deal)
-    from threading import Thread
-    Thread(target=c.send_message, args=(chat.id, text, buyer), daemon=True).start()
+    c.send_message(chat.id, text, buyer)
     cardinal_tools.mark_deal_greeting_sent(chat.id)
 
 
