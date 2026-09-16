@@ -34,23 +34,31 @@ def _should_run_interval(last_time: str, interval_sec: int) -> bool:
 
 
 def try_auto_complete_deal(c: "Cardinal", event: NewDealEvent) -> None:
-    if not c.autocomplete_enabled or not c.auto_complete_cfg.get("enabled"):
+    if not c.autocomplete_enabled:
         return
     deal = event.deal
-    item = getattr(deal, "item", None)
-    if not item:
+    if not deal or not getattr(deal, "id", None):
         return
-    name = getattr(item, "name", "") or ""
-    if not name:
+
+    item = getattr(deal, "item", None)
+    name = (getattr(item, "name", None) or "") if item else ""
+    if not name and item and getattr(item, "id", None):
         try:
             item = c.account.get_item(item.id)
-            name = item.name
+            name = getattr(item, "name", None) or ""
         except Exception:
+            name = ""
+
+    cfg = c.auto_complete_cfg or {}
+    if name:
+        if not ct.item_matches_filter(name, cfg):
             return
-    if not ct.item_matches_filter(name, c.auto_complete_cfg):
+    elif not cfg.get("all", True):
         return
+
     try:
-        c.account.update_deal(deal.id, ItemDealStatuses.SENT)
+        time.sleep(0.3)
+        c.account.update_deal(str(deal.id), ItemDealStatuses.SENT)
         logger.info(f"Сделка {deal.id} автоматически отмечена как отправленная")
     except Exception as e:
         logger.error(f"auto_complete deal {deal.id}: {e}")

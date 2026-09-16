@@ -1244,6 +1244,17 @@ class TGBot:
                 self.cardinal.MAIN_CFG[section][option] = "0"
             self.cardinal.MAIN_CFG[section][option] = str(int(not int(self.cardinal.MAIN_CFG[section][option])))
             self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
+            if section == "Playerok" and option == "autoCompleteDeals":
+                try:
+                    enabled = self.cardinal.MAIN_CFG[section][option] == "1"
+                    if not isinstance(self.cardinal.auto_complete_cfg, dict):
+                        self.cardinal.auto_complete_cfg = dict(cardinal_tools.DEFAULT_AUTO_COMPLETE)
+                    self.cardinal.auto_complete_cfg["enabled"] = enabled
+                    cardinal_tools.save_json_config(
+                        "configs/auto_complete.json", self.cardinal.auto_complete_cfg
+                    )
+                except Exception:
+                    pass
 
         sections = {
             "Playerok": kb.main_settings,

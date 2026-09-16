@@ -373,7 +373,20 @@ def auto_delivery_handler(c: Cardinal, event: NewDealEvent | ItemPaidEvent):
         deal.user.username if hasattr(deal, "user") and deal.user and hasattr(deal.user, "username")
         else str(deal.user.id) if hasattr(deal, "user") and deal.user else "Unknown"
     )
-    sent = c.send_message(chat.id, delivery_text, buyer_name)
+    chat_id = str(getattr(chat, "id", "") or "")
+    if not chat_id:
+        logger.error(f"Нет chat_id для ордера $YELLOW#{deal.id}$RESET")
+        return
+
+    sent = c.send_message(chat_id, delivery_text, buyer_name)
+    if not sent:
+        try:
+            refreshed = c.account.get_chat(chat_id)
+            if refreshed and getattr(refreshed, "id", None):
+                chat_id = str(refreshed.id)
+                sent = c.send_message(chat_id, delivery_text, buyer_name)
+        except Exception:
+            pass
 
     if not sent:
         logger.error(f"Не удалось отправить товар для ордера $YELLOW#{deal.id}$RESET.")

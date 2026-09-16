@@ -1212,7 +1212,13 @@ class Account:
                 payload["variables"]["input"]["imagesIds"].append(image.id)
         
         r = self.request("post", f"{self.base_url}/graphql", headers, payload).json()
-        return chat_message(r["data"]["createChatMessage"])
+        if r.get("errors"):
+            msg = r["errors"][0].get("message") if isinstance(r["errors"][0], dict) else str(r["errors"][0])
+            raise RuntimeError(msg or str(r["errors"]))
+        data = (r.get("data") or {}).get("createChatMessage")
+        if not data:
+            raise RuntimeError(f"createChatMessage пустой ответ: {r}")
+        return chat_message(data)
  
     def create_item(
         self, 

@@ -36,7 +36,7 @@ from cardinal import Cardinal
 import Utils.exceptions as excs
 from Utils.banner import build_banner
 
-VERSION = "1.1.7"
+VERSION = "1.1.8"
 
 Utils.cardinal_tools.set_console_title(f"Playerok Cardinal v{VERSION}")
 
